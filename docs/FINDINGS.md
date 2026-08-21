@@ -155,3 +155,31 @@ that no amount of inspecting the attack generator would have revealed.
   rendered by one generic engine, so holding out a *family label* holds out
   parameter combinations rather than mechanisms. See `scripts/ablation.py` for
   the harder holdout over generative axes.
+
+---
+
+## 6. Adversarial loop (D2): evasion ceiling under the controllable-parameter threat model
+
+Attacker controls only what PF-ADV-002 grants: amount positioning, campaign
+tempo/duration, entity reuse, and victim-device share — no gradient or feature
+access, only the score its own transactions receive.
+
+| Search | Evasion @ 0.5% FPR |
+|---|---|
+| Unmutated baseline attack | 1.4% (98.6% recall) |
+| Hill-climb, 5 rounds x 4 candidates | converges to 6.1% |
+| Wide random search, 25 draws across full parameter space | mean 6.5%, max 12.4% |
+
+Two independent searches agree: a controllable-parameter attacker caps out
+around **6-12% evasion**. The hill-climb was not undersearched — its converged
+value sits almost exactly at the random search's mean, and the winning genomes
+from both searches point the same direction (less reuse, more victim-device
+use, longer slow-drip campaigns, amount shifted up).
+
+**Open limitation:** round-over-round retraining did not visibly suppress
+evasion further (5.2% -> 6.1%, trending flat-to-up rather than down). The
+evaded fraud each round is a small fraction of what the detector already sees,
+so the retraining signal may be too thin at this population scale to move the
+decision boundary. Worth revisiting with either a longer retraining window or
+a complementary detection channel targeting the specific evasion direction
+(victim-device share, campaign tempo) rather than relying on volume alone.
