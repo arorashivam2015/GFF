@@ -1,0 +1,16 @@
+# Core (all already present in the reference anaconda env)
+numpy>=1.21
+pandas>=1.4
+scipy>=1.7
+pydantic>=2.0
+PyYAML>=6.0
+scikit-learn>=1.0
+networkx>=2.5
+lightgbm>=3.3
+xgboost>=1.7
+matplotlib>=3.4
+
+# Web prototype (installed at the E-branch stage)
+# fastapi>=0.110
+# uvicorn>=0.27
+# jinja2>=3.0
