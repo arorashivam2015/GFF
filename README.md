@@ -213,6 +213,6 @@ Winning teams also receive a showcase opportunity at GFF 2026, Mumbai.
 - [x] Attack generation agents/algorithms with fidelity evidence
 - [x] Detection model with reported precision / recall / F1 / AUC and false-positive rate
 - [x] Closed-loop demonstrated (D2 adversarial curriculum; D3 probing agent still open)
-- [ ] Solution walkthrough as **.docx**
+- [x] Solution walkthrough as **.docx** — `RedLab_Solution_Walkthrough.docx`, rebuild via `scripts/build_docx.py`
 - [x] Web prototype — runs locally (`uvicorn redlab.web.app:app`); not yet deployed to a public URL
 - [ ] All artifacts **submitted** (not draft) in the Writeups section before 31 Aug 2026
