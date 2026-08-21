@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Red vs Blue Arena{% endblock %}
+{% block content %}
+<h1>Red vs Blue Arena</h1>
+<p class="lede">Each round: an attacker mutates its controllable parameters — amount
+positioning, campaign tempo, entity reuse, victim-device share — searching for settings that
+evade the current detector at a fixed 0.5% false-positive budget. The detector then retrains on
+whatever got through. This is the closed loop.</p>
+
+<div class="two-col">
+  <div class="svg-wrap">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">EVASION RATE vs DETECTOR RECALL, per round</div>
+    {{ evasion_svg | safe }}
+    <div class="legend">
+      <span><span class="dot" style="background:#ff6b6b"></span>attacker evasion %</span>
+      <span><span class="dot" style="background:#59d38a"></span>detector recall %</span>
+    </div>
+  </div>
+  <div class="svg-wrap">
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">ATTACKER VALUE RETAINED, per round</div>
+    {{ value_svg | safe }}
+    <div class="legend">
+      <span><span class="dot" style="background:#4f9dff"></span>fraud value vs unconstrained baseline %</span>
+    </div>
+  </div>
+</div>
+
+<div class="finding">
+  <b>Evasion caps near {{ "%.0f"|format(evasion_end*100) }}%, not zero.</b> Validated two ways:
+  the hill-climb shown here converges to {{ "%.1f"|format(evasion_end*100) }}%, and an
+  independent 25-genome wide random search over the same parameter space found the same order
+  of magnitude (mean 6.5%, max 12.4%). Fitness penalises evasion that destroys attack value, so
+  the search cannot win by shrinking every transaction to a rounding error.
+</div>
+
+<h2>Round-by-round</h2>
+<table>
+  <tr><th>Round</th><th>Evasion</th><th>Value retained</th><th>Fitness</th>
+      <th>Detector recall</th><th>Fraud events</th></tr>
+  {% for r in rounds %}
+  <tr>
+    <td>{{ r.round }}</td>
+    <td style="color:var(--red)">{{ "%.1f"|format(r.evasion_rate*100) }}%</td>
+    <td>{{ "%.1f"|format(r.value_retention*100) }}%</td>
+    <td>{{ "%.3f"|format(r.fitness) }}</td>
+    <td style="color:var(--green)">{{ "%.1f"|format(r.detector_recall*100) }}%</td>
+    <td>{{ r.n_fraud }}</td>
+  </tr>
+  {% endfor %}
+</table>
+
+<h2>Winning attacker genome, per round</h2>
+<p class="lede">The parameters the search converged toward each round — all within the bounds a
+real fraudster in PF-ADV-002's threat model actually controls.</p>
+<table>
+  <tr><th>Round</th>{% for k in genome_keys %}<th>{{ k }}</th>{% endfor %}</tr>
+  {% for round, g in genome_rows %}
+  <tr><td>{{ round }}</td>{% for k in genome_keys %}<td>{{ g[k] }}</td>{% endfor %}</tr>
+  {% endfor %}
+</table>
+{% endblock %}

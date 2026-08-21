@@ -40,9 +40,14 @@ redlab/
   defend/           DEFEND - detection and evaluation
     features.py     30 causal features (past-only by construction)
     detect.py       detector + FPR-anchored and unseen-family evaluation
-  loop/             adversarial curriculum (D2) and probing agent (D3)   [next]
-scripts/            build_dataset / eval_world / eval_attacks / train_detector / ablation
-tests/              28 guardrails on corpus integrity, world structure, attack realism
+  loop/              adversarial curriculum (D2) - probing agent (D3) is next
+    adversarial.py    genome search, mutation, fitness = evasion x value retention
+  web/               working prototype - FastAPI + server-rendered dashboard
+    app.py            5 pages: Overview, Red vs Blue Arena, Defense Console,
+                      Attack Atlas, Fidelity Report
+scripts/            build_dataset / eval_world / eval_attacks / train_detector /
+                    ablation / run_loop / prepare_web_data
+tests/              53 guardrails across taxonomy, world, attacks, detector, web
 docs/               FINDINGS.md (measured results), RESPONSIBLE-RED-TEAMING.md
 ```
 
@@ -66,6 +71,12 @@ python3 scripts/eval_world.py                    # legit-population fidelity
 python3 scripts/eval_attacks.py                  # attack fidelity
 python3 scripts/train_detector.py                # detector, honest evaluation
 python3 scripts/ablation.py                      # feature ablation + mechanism holdout
+python3 scripts/run_loop.py                      # D2 adversarial curriculum
+python3 scripts/prepare_web_data.py               # persist detector + console sample
+
+# Web prototype
+uvicorn redlab.web.app:app --reload --port 8000
+# then open http://127.0.0.1:8000
 ```
 
 Runs on Python 3.9+ with the dependencies in `requirements.txt`.
@@ -196,12 +207,12 @@ Winning teams also receive a showcase opportunity at GFF 2026, Mumbai.
 ## Submission Checklist
 
 - [ ] GitHub repository — public/accessible, runnable end to end
-- [ ] Repo covers all three pillars (identify / generate / defend)
-- [ ] README with setup, run, and reproduction instructions
-- [ ] Attack taxonomy documented (breadth + depth of vectors)
-- [ ] Attack generation agents/algorithms with fidelity evidence
-- [ ] Detection model with reported precision / recall / F1 / AUC and false-positive rate
-- [ ] Closed-loop demonstrated (generated attacks feed defense training)
+- [x] Repo covers all three pillars (identify / generate / defend)
+- [x] README with setup, run, and reproduction instructions
+- [x] Attack taxonomy documented (breadth + depth of vectors) — 42 vectors, 8 families
+- [x] Attack generation agents/algorithms with fidelity evidence
+- [x] Detection model with reported precision / recall / F1 / AUC and false-positive rate
+- [x] Closed-loop demonstrated (D2 adversarial curriculum; D3 probing agent still open)
 - [ ] Solution walkthrough as **.docx**
-- [ ] Web prototype deployed and reachable, with presentable UI
+- [x] Web prototype — runs locally (`uvicorn redlab.web.app:app`); not yet deployed to a public URL
 - [ ] All artifacts **submitted** (not draft) in the Writeups section before 31 Aug 2026

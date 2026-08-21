@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<h1>Closed-loop AI Defense Lab</h1>
+<p class="lede">One system across three pillars: a machine-readable taxonomy of GenAI-powered
+payment fraud, an agent-based simulator calibrated against real fraud behaviour, and a detector
+whose gaps feed back into the next round of attacks.</p>
+
+<div class="grid cols-4">
+  <div class="card stat"><div class="label">Attack vectors identified</div>
+    <div class="value">{{ n_vectors }}</div>
+    <div class="sub">{{ n_families }} families · mean novelty {{ mean_novelty }}/5</div></div>
+  <div class="card stat"><div class="label">Legit-population fidelity</div>
+    <div class="value">{{ "%.3f"|format(disc_auc) }}</div>
+    <div class="sub">discriminator AUC vs reference (0.5 = indistinguishable; naive baseline 0.977)</div></div>
+  <div class="card stat"><div class="label">Attack fidelity gap</div>
+    <div class="value">{{ "%+.3f"|format(attack_gap) }}</div>
+    <div class="sub">PR-AUC vs reference corpus's own 28,619 labelled frauds</div></div>
+  <div class="card stat"><div class="label">Adversarial evasion (5 rounds)</div>
+    <div class="value">{{ "%.0f"|format(evasion_start*100) }}%→{{ "%.0f"|format(evasion_end*100) }}%</div>
+    <div class="sub">controllable-parameter attacker vs retraining detector</div></div>
+</div>
+
+<h2>Detection honesty: three evaluation tiers</h2>
+<div class="grid cols-3">
+  <div class="card stat"><div class="label">In-distribution</div>
+    <div class="value">{{ "%.4f"|format(pr_in) }}</div>
+    <div class="sub">PR-AUC, all attack families seen in training</div></div>
+  <div class="card stat"><div class="label">Unseen mechanism (headline)</div>
+    <div class="value" style="color:var(--amber)">{{ "%.4f"|format(pr_mech) }}</div>
+    <div class="sub">PR-AUC holding out amount-profile mechanisms never trained on</div></div>
+  <div class="card stat"><div class="label">Recall at 0.5% FPR, unseen mechanism</div>
+    <div class="value">{{ "%.1f"|format(recall_mech*100) }}%</div>
+    <div class="sub">the number that matters for "detects emerging fraud"</div></div>
+</div>
+
+<div class="finding">
+  <b>Why the headline isn't 0.99.</b> A detector trained and scored on the same attack families
+  answers an easier question than the brief asks. Holding out an entire generative mechanism
+  (never seen in any form during training) drops PR-AUC from {{ "%.2f"|format(pr_in) }} to
+  {{ "%.2f"|format(pr_mech) }} — a real, defensible generalisation gap, not a vanity metric.
+  See <a href="/console">Defense Console</a> and <a href="/fidelity">Fidelity Report</a> for the
+  full breakdown.
+</div>
+
+<h2>The three pillars</h2>
+<div class="grid cols-3">
+  <div class="card">
+    <b>Identify</b> — <a href="/atlas">Attack Atlas →</a>
+    <p style="color:var(--muted);font-size:12.5px;margin-top:8px">A morphological taxonomy across
+    rail × lifecycle stage × GenAI uplift × victim surface, covering India-specific rails, agentic
+    commerce, and attacks on the defence itself.</p>
+  </div>
+  <div class="card">
+    <b>Generate</b> — <a href="/fidelity">Fidelity Report →</a>
+    <p style="color:var(--muted);font-size:12.5px;margin-top:8px">An agent-based payment world
+    calibrated on IBM's TabFormer reference corpus, with attack injection matched to the
+    behavioural signature of 28,619 real-labelled reference frauds.</p>
+  </div>
+  <div class="card">
+    <b>Defend</b> — <a href="/console">Defense Console →</a> · <a href="/arena">Red vs Blue Arena →</a>
+    <p style="color:var(--muted);font-size:12.5px;margin-top:8px">30 causal features, a
+    LightGBM detector, and a closed adversarial loop where the attacker adapts against the
+    deployed model and the detector retrains on what got through.</p>
+  </div>
+</div>
+{% endblock %}

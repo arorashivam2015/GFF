@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Attack Atlas{% endblock %}
+{% block content %}
+<h1>Attack Atlas</h1>
+<p class="lede">42 machine-readable attack vectors across 8 families — the same specs that drive
+the simulator in Generate. Each has a priority score (novelty, impact, scalability, detection
+difficulty) and at least one falsifiable detection hypothesis per declared signal channel.</p>
+
+<h2>Family × rail occupancy</h2>
+<div class="card matrix" style="overflow-x:auto">
+<table>
+  <tr><th class="rowhead">family</th>{% for r in rails %}<th>{{ r[:8] }}</th>{% endfor %}</tr>
+  {% for fam, row in matrix.items() %}
+  <tr>
+    <th class="rowhead">{{ fam }}</th>
+    {% for r in rails %}
+      {% set n = row.get(r, 0) %}
+      <td class="{{ 'n' if n else 'n0' }}">{{ n if n else '·' }}</td>
+    {% endfor %}
+  </tr>
+  {% endfor %}
+</table>
+</div>
+
+<h2>Vectors ({{ vectors|length }})</h2>
+<form class="filter-bar" method="get" action="/atlas">
+  <select name="family" onchange="this.form.submit()">
+    <option value="ALL" {{ "selected" if sel_family=="ALL" else "" }}>all families</option>
+    {% for f in families %}<option value="{{ f }}" {{ "selected" if sel_family==f else "" }}>{{ f }}</option>{% endfor %}
+  </select>
+  <select name="maturity" onchange="this.form.submit()">
+    <option value="ALL" {{ "selected" if sel_maturity=="ALL" else "" }}>all maturity</option>
+    {% for m in maturities %}<option value="{{ m }}" {{ "selected" if sel_maturity==m else "" }}>{{ m }}</option>{% endfor %}
+  </select>
+</form>
+
+<table>
+  <tr><th>ID</th><th>Name</th><th>Family</th><th>Maturity</th><th>Priority</th><th>Rails</th></tr>
+  {% for v in vectors %}
+  <tr>
+    <td><a href="/atlas/{{ v.id }}">{{ v.id }}</a></td>
+    <td style="font-family:var(--sans)">{{ v.name }}</td>
+    <td>{{ v.family.value }}</td>
+    <td><span class="pill {{ v.maturity.value }}">{{ v.maturity.value }}</span></td>
+    <td>{{ "%.2f"|format(v.priority) }}</td>
+    <td style="color:var(--muted)">{{ v.rails|map(attribute='value')|list|join(', ') }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

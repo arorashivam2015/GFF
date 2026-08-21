@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ v.id }}{% endblock %}
+{% block content %}
+<p><a href="/atlas">← Attack Atlas</a></p>
+<div class="vector-detail">
+  <h3>{{ v.id }} — {{ v.name }}</h3>
+  <span class="pill {{ v.maturity.value }}">{{ v.maturity.value }}</span>
+  <span class="badge">family: {{ v.family.value }}</span>
+  <span class="badge">priority {{ "%.2f"|format(v.priority) }}</span>
+  <p style="margin-top:14px;color:var(--text);font-size:13.5px">{{ v.summary }}</p>
+
+  <div class="badge-row">
+    {% for r in v.rails %}<span class="badge">rail: {{ r.value }}</span>{% endfor %}
+  </div>
+  <div class="badge-row">
+    {% for s in v.stages %}<span class="badge">stage: {{ s.value }}</span>{% endfor %}
+  </div>
+  <div class="badge-row">
+    {% for g in v.genai_uplift %}<span class="badge">uplift: {{ g.value }}</span>{% endfor %}
+  </div>
+  <div class="badge-row">
+    {% for s in v.victim_surfaces %}<span class="badge">surface: {{ s.value }}</span>{% endfor %}
+  </div>
+
+  <h2 style="border:none">Simulation profile</h2>
+  <p style="font-size:12.5px;color:var(--muted)">
+    entities: {{ v.simulation.entities|join(', ') }} ·
+    amount: {{ v.simulation.amount_profile.value }} ·
+    tempo: {{ v.simulation.temporal_shape.value }} ·
+    duration {{ v.simulation.duration_days[0] }}–{{ v.simulation.duration_days[1] }}d ·
+    events {{ v.simulation.events_per_campaign[0] }}–{{ v.simulation.events_per_campaign[1] }} ·
+    entity reuse {{ v.simulation.entity_reuse }}
+  </p>
+  {% if v.simulation.notes %}<p style="font-size:12.5px;color:var(--muted);font-style:italic">{{ v.simulation.notes }}</p>{% endif %}
+
+  <h2 style="border:none">Detection hypotheses</h2>
+  {% for h in v.detection_hypotheses %}
+  <div class="hyp">
+    <div class="chan">{{ h.channel.value }}</div>
+    <div style="margin-top:3px"><b>{{ h.feature }}</b></div>
+    <div style="color:var(--muted);margin-top:3px">{{ h.rationale }}</div>
+  </div>
+  {% endfor %}
+
+  {% if v.mitigations %}
+  <h2 style="border:none">Mitigations</h2>
+  <ul style="font-size:12.5px;color:var(--muted)">
+    {% for m in v.mitigations %}<li>{{ m }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+</div>
+{% endblock %}

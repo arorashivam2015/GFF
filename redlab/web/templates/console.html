@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Defense Console{% endblock %}
+{% block content %}
+<h1>Live Defense Console</h1>
+<p class="lede">The persisted detector scoring a held-out slice of the world it has never seen
+during training — real risk scores, real thresholds, real decisions. BLOCK and STEP-UP
+thresholds are set at the 0.1% and 0.5% false-positive budgets respectively, matching how
+payments risk teams actually specify an operating point.
+{% if window == "busy" %}Showing <b>{{ demo_day }}</b>, the busiest fraud day in the held-out
+sample — <a href="/console?window=full">view the full chronological feed instead</a> (real
+prevalence, ~1% fraud — mostly ALLOW, as a live feed actually looks).
+{% else %}Showing the literal chronological feed at real prevalence —
+<a href="/console">back to the busiest day</a>.{% endif %}</p>
+
+<div class="grid cols-3">
+  <div class="card stat"><div class="label">Fraud recall (any action)</div>
+    <div class="value">{{ "%.1f"|format(recall_pct) }}%</div>
+    <div class="sub">{{ caught }} / {{ total_fraud }} fraud events flagged for STEP-UP or BLOCK</div></div>
+  <div class="card stat"><div class="label">False-block rate on legit traffic</div>
+    <div class="value">{{ "%.2f"|format(false_block_rate) }}%</div>
+    <div class="sub">the friction cost of the BLOCK threshold</div></div>
+  <div class="card stat"><div class="label">Decision thresholds</div>
+    <div class="value" style="font-size:15px">{{ "%.4f"|format(thresh_review) }} / {{ "%.4f"|format(thresh_block) }}</div>
+    <div class="sub">STEP-UP ≥ / BLOCK ≥ risk score</div></div>
+</div>
+
+<h2>Transaction feed</h2>
+<form class="filter-bar" method="get" action="/console">
+  <select name="decision" onchange="this.form.submit()">
+    {% for d in ["ALL","ALLOW","STEP-UP","BLOCK"] %}
+    <option value="{{ d }}" {{ "selected" if decision_filter==d else "" }}>{{ d }}</option>
+    {% endfor %}
+  </select>
+  <label style="display:flex;align-items:center;gap:6px;color:var(--muted);font-size:12.5px">
+    <input type="checkbox" name="only_fraud" value="true" {{ "checked" if only_fraud else "" }}
+      onchange="this.form.submit()"> fraud only
+  </label>
+  <span style="color:var(--muted);font-size:12px;align-self:center">{{ n_shown }} rows shown</span>
+</form>
+
+<table>
+  <tr><th>Time</th><th>User</th><th>Merchant</th><th>MCC</th><th>Channel</th>
+      <th>Amount</th><th>Risk</th><th>Decision</th><th>Ground truth</th></tr>
+  {% for r in rows %}
+  <tr class="{{ 'console-row fraud' if r.is_fraud else 'console-row' }}">
+    <td>{{ r.timestamp.strftime('%m-%d %H:%M') }}</td>
+    <td>{{ r.user_id }}</td>
+    <td>{{ r.merchant_id }}</td>
+    <td>{{ r.mcc }}</td>
+    <td>{{ r.channel.replace(' Transaction','') }}</td>
+    <td>${{ "%.2f"|format(r.amount) }}</td>
+    <td>{{ "%.4f"|format(r.risk_score) }}</td>
+    <td class="dec"><span class="pill {{ 'block' if r.decision=='BLOCK' else ('stepup' if r.decision=='STEP-UP' else 'allow') }}">{{ r.decision }}</span></td>
+    <td>{% if r.is_fraud %}<span style="color:var(--red)">{{ r.attack_id }}</span>{% else %}<span style="color:var(--muted)">legit</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

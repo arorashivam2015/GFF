@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Fidelity Report{% endblock %}
+{% block content %}
+<h1>Fidelity Report</h1>
+<p class="lede">Three tiers of evidence, each labelled by strength: marginal distribution
+matches (necessary, weak alone), stylised facts documented for real payment systems
+(strongest), and the adversarial discriminator (the headline number — 0.5 means
+indistinguishable from the reference).</p>
+
+<div class="grid cols-3">
+  <div class="card stat"><div class="label">Discriminator AUC</div>
+    <div class="value">{{ "%.3f"|format(disc_auc) }}</div>
+    <div class="sub">naive uniform baseline: 0.977 · marginals-only baseline: 0.847</div></div>
+  <div class="card stat"><div class="label">Generated rows compared</div>
+    <div class="value">{{ "{:,}".format(n_gen) }}</div>
+    <div class="sub">vs {{ "{:,}".format(n_ref) }} reference rows</div></div>
+  <div class="card stat"><div class="label">Reference</div>
+    <div class="value" style="font-size:14px">{{ ref_name }}</div>
+    <div class="sub">externally authored; IBM documents it as synthetic — see calibration.py</div></div>
+</div>
+
+{% for fam, metrics in fam_metrics.items() %}
+<h2>{{ fam }} metrics</h2>
+<table>
+  <tr><th>metric</th><th>value</th><th>target</th><th>verdict</th><th>interpretation</th></tr>
+  {% for m in metrics %}
+  <tr>
+    <td>{{ m.name }}</td>
+    <td>{{ "%.4f"|format(m.value) }}</td>
+    <td>{{ "%.4f"|format(m.target) if m.target is not none else "—" }}</td>
+    <td><span class="tag-verdict {{ m.verdict }}">{{ m.verdict }}</span></td>
+    <td style="font-family:var(--sans);color:var(--muted)">{{ m.interpretation }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endfor %}
+
+<h2>Attack detectability signature vs reference fraud</h2>
+<p class="lede">The target for synthetic attacks is not "hard to detect" — it is "as detectable
+as reference fraud." Same simple model, trained separately on each corpus's own labels, compared
+feature by feature.</p>
+<div class="svg-wrap">
+  {{ sig_svg | safe }}
+  <div class="legend">
+    <span><span class="dot" style="background:#ff6b6b"></span>reference fraud (28,619 real-labelled events)</span>
+    <span><span class="dot" style="background:#4f9dff"></span>generated fraud</span>
+  </div>
+</div>
+<div class="grid cols-2" style="margin-top:14px">
+  <div class="card stat"><div class="label">ROC-AUC gap</div>
+    <div class="value">{{ "%+.4f"|format(fa_gen.roc_auc - fa_ref.roc_auc) }}</div></div>
+  <div class="card stat"><div class="label">PR-AUC gap</div>
+    <div class="value">{{ "%+.4f"|format(fa_gen.pr_auc - fa_ref.pr_auc) }}</div></div>
+</div>
+{% endblock %}

@@ -269,7 +269,16 @@ class AttackInjector:
                 cid += 1
                 n_ev = int(rng.integers(lo_e, hi_e + 1))
                 n_ev = int(min(n_ev, 600))          # cap so one spec cannot dominate
+
+                # Duration is clipped to fit inside the world's time horizon.
+                # Several vectors (e.g. PF-SID-003, up to 400 days) exceed a
+                # 240-day world on their own. Unclipped, horizon - dur went
+                # negative, start collapsed to 0, and the campaign's tail ran
+                # past the world's last generated day - 304 fraud events (1.9%
+                # of the corpus) landed in a period with no legitimate traffic
+                # at all, which no real payment system produces.
                 dur = int(rng.integers(lo_d, hi_d + 1))
+                dur = min(dur, max(horizon - 1, 1))
                 start = int(rng.integers(0, max(horizon - dur, 1)))
 
                 # Victim count is set by how many events each victim should

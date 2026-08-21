@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}RedLab{% endblock %} · AI Defense Lab</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">RED<span>LAB</span> · AI Defense Lab for Payment Security</div>
+  <nav class="tabs">
+    <a href="/" class="{{ 'active' if active=='home' else '' }}">Overview</a>
+    <a href="/arena" class="{{ 'active' if active=='arena' else '' }}">Red vs Blue Arena</a>
+    <a href="/console" class="{{ 'active' if active=='console' else '' }}">Defense Console</a>
+    <a href="/atlas" class="{{ 'active' if active=='atlas' else '' }}">Attack Atlas</a>
+    <a href="/fidelity" class="{{ 'active' if active=='fidelity' else '' }}">Fidelity Report</a>
+  </nav>
+</header>
+<main>
+  {% block content %}{% endblock %}
+</main>
+<footer>RedLab — Mastercard Innovation Challenge @ GFF 2026 · synthetic data only · see /docs/RESPONSIBLE-RED-TEAMING.md</footer>
+</body>
+</html>
