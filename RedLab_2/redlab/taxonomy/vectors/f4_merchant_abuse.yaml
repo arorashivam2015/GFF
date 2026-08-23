@@ -1,0 +1,247 @@
+family: merchant_abuse
+description: >
+  The acquiring side of the network, historically under-modelled relative to
+  issuing. GenAI makes a convincing merchant cheap to manufacture: website,
+  catalogue, reviews, incorporation narrative and support correspondence can all
+  be generated faster than an underwriting team can review them.
+
+vectors:
+  - id: PF-MER-001
+    name: Generated-collateral merchant onboarding
+    family: merchant_abuse
+    maturity: emerging
+    summary: >
+      A complete, internally consistent business identity — storefront, product
+      catalogue, imagery, reviews, policies and financial projections — is
+      generated to pass acquirer underwriting for an entity that does not trade.
+    rails: [onboarding, card_cnp, upi_p2m]
+    stages: [staging]
+    genai_uplift: [content_generation, document_forgery, orchestration]
+    victim_surfaces: [acquirer, psp]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Registered or shell legal entity
+      - Bank account for settlement
+      - Underwriting that weights web presence heavily
+    signals: [identity, graph, text]
+    simulation:
+      entities: [merchant, mule_account, device]
+      amount_profile: micro_probe
+      temporal_shape: business_hours
+      duration_days: [1, 21]
+      events_per_campaign: [1, 5]
+      entity_reuse: 0.3
+      notes: Seeds PF-MER-002 and PF-MER-005; low direct loss, high enabling value.
+    detection_hypotheses:
+      - channel: text
+        feature: catalogue_and_policy_text_generative_markers
+        rationale: >
+          Generated storefront copy is fluent but statistically distinct, and
+          clusters across sibling merchants from the same operator.
+      - channel: identity
+        feature: domain_age_vs_claimed_trading_history
+        rationale: Claimed years of trading against a two-week-old domain is a hard contradiction.
+      - channel: graph
+        feature: shared_settlement_account_and_director_overlap
+        rationale: Shell merchant fleets share settlement and control infrastructure.
+    mitigations:
+      - Cross-merchant similarity scoring at underwriting
+      - Domain age and independent trading-evidence requirements
+      - Settlement-account reuse limits and delayed first payout
+    scores: {novelty: 4, impact: 4, scalability: 5, detection_difficulty: 4}
+    references:
+      - Card-network merchant-monitoring programme rules
+
+  - id: PF-MER-002
+    name: Transaction laundering through generated storefronts
+    family: merchant_abuse
+    maturity: observed
+    summary: >
+      Prohibited or high-risk sales are processed through an approved low-risk
+      merchant account, with a plausible generated front-end catalogue masking
+      the true product and MCC.
+    rails: [card_cnp, upi_p2m, cross_border]
+    stages: [execution, evasion, cashout]
+    genai_uplift: [content_generation, orchestration, adaptive_evasion]
+    victim_surfaces: [acquirer, issuer, psp]
+    actor_tiers: [organized]
+    preconditions:
+      - An approved merchant account (own or rented)
+      - Traffic source for the true product
+    signals: [transaction, sequence, graph, text]
+    network_role: fan_in
+    simulation:
+      entities: [merchant, cardholder, device]
+      amount_profile: typical
+      temporal_shape: sustained_campaign
+      duration_days: [30, 365]
+      events_per_campaign: [200, 5000]
+      entity_reuse: 0.5
+      notes: >
+        Basket composition contradicts declared MCC — ticket distribution,
+        refund rate and geography all drift from the merchant's category peers.
+    detection_hypotheses:
+      - channel: transaction
+        feature: ticket_size_distribution_divergence_from_mcc_peers
+        rationale: >
+          Laundered volume rarely matches the amount distribution of the
+          category it hides in.
+      - channel: sequence
+        feature: settlement_to_refund_lag_profile
+        rationale: Refund and chargeback timing diverges from genuine category behaviour.
+      - channel: graph
+        feature: cardholder_overlap_across_unrelated_merchants
+        rationale: Shared customer sets across supposedly unrelated merchants reveal a common operator.
+      - channel: text
+        feature: descriptor_vs_catalogue_semantic_mismatch
+        rationale: Statement descriptors drift from the advertised catalogue.
+    mitigations:
+      - Continuous MCC-conformance monitoring post-approval
+      - Mystery-shopping and content crawling of approved merchants
+      - Peer-relative distribution alerting
+    scores: {novelty: 3, impact: 4, scalability: 4, detection_difficulty: 5}
+    references:
+      - Card-network transaction-laundering compliance guidance
+
+  - id: PF-MER-003
+    name: Industrialised friendly-fraud dispute narratives
+    family: merchant_abuse
+    maturity: emerging
+    summary: >
+      Consumers, or services acting for them, use an LLM to draft chargeback
+      claims optimised against issuer dispute criteria — producing coherent,
+      reason-code-aligned narratives at a volume that overwhelms manual review.
+    rails: [card_cnp, card_token]
+    stages: [cashout, evasion]
+    genai_uplift: [content_generation, target_research, adaptive_evasion]
+    victim_surfaces: [merchant, acquirer, issuer]
+    actor_tiers: [opportunist, faas_vendor]
+    preconditions:
+      - Genuine prior purchase
+      - Knowledge of reason-code evidentiary standards
+    signals: [text, sequence, transaction]
+    simulation:
+      entities: [cardholder, merchant]
+      amount_profile: typical
+      temporal_shape: slow_drip
+      duration_days: [30, 180]
+      events_per_campaign: [1, 12]
+      entity_reuse: 0.4
+      notes: >
+        The transaction is genuine; fraud exists only in the dispute. Labels
+        arrive late, which matters for the feedback-loop design.
+      # Deliberately included because it corrupts the label supply that
+      # supervised fraud models depend on - see PF-ADV-003.
+    detection_hypotheses:
+      - channel: text
+        feature: dispute_narrative_generative_markers_and_template_clustering
+        rationale: >
+          Generated narratives cluster in embedding space and align suspiciously
+          well to reason-code language.
+      - channel: sequence
+        feature: dispute_rate_per_cardholder_over_rolling_window
+        rationale: Serial disputers are the dominant driver of friendly-fraud loss.
+      - channel: transaction
+        feature: delivery_and_usage_evidence_contradiction
+        rationale: Fulfilment and device-usage telemetry contradict the not-received claim.
+    mitigations:
+      - Cardholder-level dispute-propensity scoring
+      - Compelling-evidence automation on the merchant side
+      - Narrative-similarity clustering across the dispute queue
+    scores: {novelty: 3, impact: 3, scalability: 5, detection_difficulty: 4}
+    references:
+      - Card-network dispute-resolution reason-code frameworks
+
+  - id: PF-MER-004
+    name: Agent-orchestrated refund and returns abuse
+    family: merchant_abuse
+    maturity: projected
+    summary: >
+      Agents run the full returns funnel across many merchants — placing orders,
+      opening support tickets, escalating with policy-aware argumentation, and
+      extracting refunds without return — tuned per merchant's published policy.
+    rails: [card_cnp, card_token, upi_p2m]
+    stages: [execution, cashout]
+    genai_uplift: [conversational_agent, orchestration, target_research, adaptive_evasion]
+    victim_surfaces: [merchant, psp]
+    actor_tiers: [opportunist, organized, faas_vendor]
+    preconditions:
+      - Funded accounts across multiple merchants
+      - Published or inferable refund policies
+    signals: [text, sequence, graph, transaction]
+    network_role: fan_out
+    simulation:
+      entities: [cardholder, merchant, device, beneficiary]
+      amount_profile: typical
+      temporal_shape: sustained_campaign
+      duration_days: [14, 120]
+      events_per_campaign: [10, 200]
+      entity_reuse: 0.55
+      notes: Cross-merchant coordination is the detectable structure.
+    detection_hypotheses:
+      - channel: sequence
+        feature: refund_rate_and_escalation_depth_per_account
+        rationale: Abusers escalate systematically where genuine customers rarely do.
+      - channel: text
+        feature: support_ticket_argumentation_similarity
+        rationale: Policy-aware argumentation reuses structure across merchants.
+      - channel: graph
+        feature: identity_reuse_across_merchant_refund_clusters
+        rationale: The same payment instruments and addresses recur across victims.
+      - channel: transaction
+        feature: purchase_to_refund_ratio_by_instrument
+        rationale: Instrument-level ratio is stable for genuine users and extreme for abusers.
+    mitigations:
+      - Cross-merchant abuse-signal consortiums
+      - Refund-velocity limits per instrument and address
+      - Human review triggered by escalation-depth thresholds
+    scores: {novelty: 4, impact: 3, scalability: 5, detection_difficulty: 4}
+    references:
+      - Merchant Risk Council returns-abuse reporting
+
+  - id: PF-MER-005
+    name: Merchant bust-out with synthetic trading history
+    family: merchant_abuse
+    maturity: emerging
+    summary: >
+      A merchant builds months of genuine-looking low-value settlement — some of
+      it self-funded through mule cards — to earn favourable settlement terms,
+      then processes a large batch of fraudulent volume and disappears before
+      chargebacks land.
+    rails: [card_cnp, upi_p2m]
+    stages: [staging, execution, cashout]
+    genai_uplift: [orchestration, content_generation]
+    victim_surfaces: [acquirer, issuer]
+    actor_tiers: [organized]
+    preconditions:
+      - Approved merchant account with reduced reserve
+      - Mule cards to seed early trading history
+    signals: [transaction, sequence, graph]
+    network_role: collection_point
+    simulation:
+      entities: [merchant, cardholder, mule_account]
+      amount_profile: escalating
+      temporal_shape: dormant_then_spike
+      duration_days: [90, 300]
+      events_per_campaign: [100, 3000]
+      entity_reuse: 0.65
+      notes: >
+        Chargeback labels arrive 30-120 days after the bust-out, which is
+        exactly the label-latency problem the defence must handle.
+    detection_hypotheses:
+      - channel: sequence
+        feature: volume_spike_ratio_vs_trailing_merchant_baseline
+        rationale: Bust-out volume is orders of magnitude above the merchant's own history.
+      - channel: graph
+        feature: cardholder_concentration_in_early_trading_history
+        rationale: Self-funded warm-up reuses a small card pool.
+      - channel: transaction
+        feature: settlement_acceleration_requests_before_spike
+        rationale: Operators seek faster payout immediately before the exit.
+    mitigations:
+      - Dynamic reserves keyed to volume-growth anomalies
+      - Payout holds on step-change volume
+      - Early-history card-concentration checks at underwriting review
+    scores: {novelty: 3, impact: 5, scalability: 3, detection_difficulty: 4}
+    references:
+      - Acquirer risk-management and reserve-policy literature

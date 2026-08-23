@@ -1,0 +1,251 @@
+family: synthetic_identity
+description: >
+  Identities that never existed, or real identities recombined into new ones.
+  GenAI attacks the two historic bottlenecks: producing convincing documents and
+  faces, and maintaining the long, patient behavioural history that makes a
+  synthetic identity creditworthy before it is monetised.
+
+vectors:
+  - id: PF-SID-001
+    name: Generated KYC document pack
+    family: synthetic_identity
+    maturity: emerging
+    summary: >
+      Internally consistent identity-document images, utility bills and bank
+      statements are generated as a coherent set, defeating cross-document
+      consistency checks that catch individually forged artefacts.
+    rails: [onboarding, wallet_ppi, card_cnp]
+    stages: [staging]
+    genai_uplift: [document_forgery, content_generation, orchestration]
+    victim_surfaces: [kyc_provider, issuer, psp]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Template knowledge of the target document formats
+      - Onboarding flow accepting uploaded images rather than issuer-verified data
+    signals: [identity, graph, device]
+    simulation:
+      entities: [synthetic_identity, device, mule_account]
+      amount_profile: micro_probe
+      temporal_shape: slow_drip
+      duration_days: [1, 14]
+      events_per_campaign: [1, 6]
+      entity_reuse: 0.15
+      notes: >
+        Onboarding-time only. Value is that it seeds later families — bust-out
+        and mule networks both consume these identities.
+    detection_hypotheses:
+      - channel: identity
+        feature: generative_image_provenance_and_noise_residual
+        rationale: >
+          Synthesised documents carry model-specific frequency residuals absent
+          from photographs of physical documents.
+      - channel: graph
+        feature: attribute_recombination_overlap_with_existing_identities
+        rationale: >
+          Synthetics reuse fragments of real PII; overlap on a subset of
+          attributes with no full match is the classic tell.
+      - channel: device
+        feature: onboarding_device_reuse_across_distinct_identities
+        rationale: Document farms submit many identities from few devices.
+    mitigations:
+      - Verify against issuing-source APIs rather than uploaded images
+      - Device and network reuse limits at onboarding
+      - Provenance/C2PA checks where available
+    scores: {novelty: 3, impact: 4, scalability: 5, detection_difficulty: 4}
+    references:
+      - FATF guidance on digital identity
+
+  - id: PF-SID-002
+    name: Camera-injection face morph against liveness
+    family: synthetic_identity
+    maturity: emerging
+    summary: >
+      A morphed or fully synthetic face is injected at the virtual-camera layer,
+      bypassing the physical capture path entirely so that presentation-attack
+      detection never sees a presentation.
+    rails: [onboarding, aeps, wallet_ppi]
+    stages: [staging, evasion]
+    genai_uplift: [video_synthesis, code_generation]
+    victim_surfaces: [kyc_provider, issuer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Virtual camera or rooted/emulated device
+      - Reference face image of a real or synthetic subject
+    signals: [biometric, identity, device]
+    simulation:
+      entities: [synthetic_identity, device]
+      amount_profile: micro_probe
+      temporal_shape: slow_drip
+      duration_days: [1, 7]
+      events_per_campaign: [1, 4]
+      entity_reuse: 0.2
+      notes: Simulated as liveness/match score distributions rather than media.
+    detection_hypotheses:
+      - channel: biometric
+        feature: injection_attack_detection_vs_presentation_attack_detection
+        rationale: >
+          Injection bypasses PAD entirely; only capture-path integrity checks
+          (signed frames, sensor attestation) catch it.
+      - channel: device
+        feature: emulator_root_and_virtual_camera_indicators
+        rationale: Injection requires a compromised or emulated capture stack.
+      - channel: identity
+        feature: face_embedding_near_duplicate_across_enrolments
+        rationale: Morph sources are reused, producing tight embedding clusters.
+    mitigations:
+      - Hardware-attested capture with signed frames
+      - Injection-attack detection as a distinct control from PAD
+      - Face-embedding dedupe across the enrolment population
+    scores: {novelty: 4, impact: 4, scalability: 4, detection_difficulty: 5}
+    references:
+      - ISO/IEC 30107 presentation-attack detection
+      - FIDO face-verification certification programme
+
+  - id: PF-SID-003
+    name: Agent-nurtured synthetic identity bust-out
+    family: synthetic_identity
+    maturity: projected
+    summary: >
+      An agent maintains hundreds of synthetic identities through months of
+      small, well-behaved credit activity — each with a distinct, plausible
+      spending persona — then triggers a coordinated simultaneous drain.
+    rails: [card_cnp, card_cp, credit_on_upi, nach_emandate]
+    stages: [staging, execution, cashout]
+    genai_uplift: [orchestration, target_research, content_generation]
+    victim_surfaces: [issuer, merchant]
+    actor_tiers: [organized]
+    preconditions:
+      - Successfully onboarded synthetic identities with credit lines
+      - Patience capital to fund months of repayment
+    signals: [transaction, sequence, graph]
+    network_role: originator
+    simulation:
+      entities: [synthetic_identity, merchant, device, mule_account]
+      amount_profile: escalating
+      temporal_shape: dormant_then_spike
+      duration_days: [120, 400]
+      events_per_campaign: [60, 500]
+      entity_reuse: 0.6
+      notes: >
+        Persona diversity is the whole point — the generator must produce
+        *different* plausible spending histories, not one pattern repeated.
+    detection_hypotheses:
+      - channel: sequence
+        feature: utilisation_ramp_and_repayment_regularity_index
+        rationale: >
+          Nurtured accounts repay too perfectly; genuine consumers show
+          irregular, life-driven variance.
+      - channel: graph
+        feature: synchronised_activation_across_unlinked_accounts
+        rationale: >
+          Coordination is invisible per account but obvious as correlated timing
+          across the cohort — the strongest available signal.
+      - channel: transaction
+        feature: cash_equivalent_mcc_share_at_bustout
+        rationale: Extraction concentrates in cash-like MCCs at the terminal phase.
+    mitigations:
+      - Cohort-level correlation monitoring on activation timing
+      - Behavioural-variance scoring against genuine-population baselines
+      - Velocity caps on cash-equivalent spend after limit increases
+    scores: {novelty: 5, impact: 5, scalability: 4, detection_difficulty: 5}
+    references:
+      - Federal Reserve synthetic-identity fraud definition and payments studies
+
+  - id: PF-SID-004
+    name: Deepfake video-KYC session
+    family: synthetic_identity
+    maturity: emerging
+    summary: >
+      Live video-KYC calls — where an agent visually verifies a person against
+      their document — are attacked with real-time face and voice synthesis
+      driven by a puppeteering operator or an autonomous agent.
+    rails: [onboarding, wallet_ppi, credit_on_upi]
+    stages: [staging]
+    genai_uplift: [video_synthesis, voice_cloning, conversational_agent]
+    victim_surfaces: [kyc_provider, issuer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Real-time face-swap with acceptable latency
+      - Matching generated document pack
+    signals: [biometric, identity, device]
+    simulation:
+      entities: [synthetic_identity, device]
+      amount_profile: micro_probe
+      temporal_shape: business_hours
+      duration_days: [1, 3]
+      events_per_campaign: [1, 3]
+      entity_reuse: 0.25
+      notes: >
+        Simulated as verification-session metadata: latency, retry count,
+        liveness scores, agent-override flags.
+    detection_hypotheses:
+      - channel: biometric
+        feature: temporal_consistency_and_challenge_response_latency
+        rationale: >
+          Real-time synthesis adds measurable lag on unpredictable challenges
+          (turn head, occlude face) that a static pipeline handles poorly.
+      - channel: device
+        feature: capture_stack_integrity_and_network_jitter_profile
+        rationale: Puppeteering pipelines introduce characteristic processing delay.
+      - channel: identity
+        feature: session_retry_count_and_agent_override_rate
+        rationale: Attackers retry until they draw a lenient reviewer.
+    mitigations:
+      - Randomised active-liveness challenges with latency thresholds
+      - Reviewer-level override auditing to find gamed queues
+      - Cross-session face dedupe
+    scores: {novelty: 4, impact: 4, scalability: 3, detection_difficulty: 4}
+    references:
+      - RBI video-based customer identification process (V-CIP) guidelines
+
+  - id: PF-SID-005
+    name: Persona-managed mule recruitment at scale
+    family: synthetic_identity
+    maturity: emerging
+    summary: >
+      Conversational agents run fake job and rental adverts, screen respondents,
+      and coach recruits through opening accounts they then hand over — turning
+      mule recruitment from a manual funnel into an automated pipeline.
+    rails: [upi_p2p, imps, wallet_ppi, onboarding]
+    stages: [staging, cashout]
+    genai_uplift: [conversational_agent, content_generation, orchestration]
+    victim_surfaces: [consumer, psp, issuer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Advert distribution on job boards and messaging platforms
+      - Onboarding flows that permit rapid new-account creation
+    signals: [graph, sequence, text, identity]
+    network_role: originator
+    simulation:
+      entities: [mule_account, beneficiary, device, synthetic_identity]
+      amount_profile: just_under_limit
+      temporal_shape: sustained_campaign
+      duration_days: [14, 180]
+      events_per_campaign: [20, 300]
+      entity_reuse: 0.8
+      notes: >
+        High reuse by design — this vector exists to give the graph detector
+        something real to find.
+    detection_hypotheses:
+      - channel: graph
+        feature: account_cluster_by_shared_device_ip_and_beneficiary
+        rationale: Recruited accounts share operational infrastructure downstream.
+      - channel: sequence
+        feature: pass_through_ratio_and_balance_dwell_time
+        rationale: >
+          Mule accounts hold funds for minutes; genuine accounts hold for days.
+          This is the single most portable mule feature.
+      - channel: text
+        feature: recruitment_script_similarity_in_inbound_messaging
+        rationale: Automated recruitment reuses semantic structure across variants.
+      - channel: identity
+        feature: onboarding_burst_from_shared_attributes
+        rationale: Cohorts onboard in tight windows with overlapping attributes.
+    mitigations:
+      - Pass-through-ratio monitoring on newly opened accounts
+      - Cross-institution mule-account signal sharing
+      - Onboarding velocity limits per device/IP/address cluster
+    scores: {novelty: 3, impact: 5, scalability: 5, detection_difficulty: 3}
+    references:
+      - Europol money-muling campaign reporting
+      - FATF money-laundering typologies

@@ -1,0 +1,266 @@
+family: social_engineering
+description: >
+  Authorised-push-payment (APP) fraud, where the victim is manipulated into
+  initiating a genuine payment. GenAI collapses the cost of the manipulation
+  itself: personalisation that once needed a human operator per victim is now
+  generated per victim at negligible marginal cost. These attacks are hard for
+  transaction models because every credential, device and consent is legitimate.
+
+vectors:
+  - id: PF-SE-001
+    name: Voice-cloned bank-official OTP extraction
+    family: social_engineering
+    maturity: emerging
+    summary: >
+      Attacker clones a bank's IVR voice profile and a named relationship
+      manager's voice from public sources, calls the victim about a fabricated
+      "blocked transaction", and walks them through disclosing an OTP or
+      approving a push notification in real time.
+    rails: [upi_p2p, imps, card_cnp]
+    stages: [recon, acquisition, execution]
+    genai_uplift: [voice_cloning, target_research, conversational_agent]
+    victim_surfaces: [consumer, issuer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Victim phone number and issuing-bank affiliation known (breach or data broker)
+      - Spoofed or lookalike caller ID
+      - Seconds-scale voice synthesis to sustain a live call
+    signals: [transaction, sequence, text]
+    simulation:
+      entities: [cardholder, beneficiary, device]
+      amount_profile: drain
+      temporal_shape: burst
+      duration_days: [1, 2]
+      events_per_campaign: [2, 9]
+      entity_reuse: 0.55
+      notes: >
+        Genuine device, genuine credential, genuine consent. Only the
+        beneficiary and the tempo are anomalous.
+    detection_hypotheses:
+      - channel: transaction
+        feature: first_time_beneficiary AND amount_percentile_vs_own_history
+        rationale: >
+          Victim drains to a payee never transacted with before, at an amount
+          far above their own distribution.
+      - channel: sequence
+        feature: time_since_inbound_call_to_payment_initiation
+        rationale: >
+          Payment initiated within minutes of an inbound call is the single
+          strongest APP signal where telco signal is available.
+      - channel: text
+        feature: scam_script_similarity_of_inapp_chat_or_sms
+        rationale: >
+          Pretext language ("account will be blocked", "share the code to
+          reverse") clusters tightly even when reworded by an LLM.
+    mitigations:
+      - In-flow interstitial warning keyed to first-time high-value beneficiary
+      - Cooling-off window on new-payee limit increases
+      - Confirmation-of-payee name matching
+    scores: {novelty: 3, impact: 4, scalability: 5, detection_difficulty: 4}
+    references:
+      - RBI digital-payment fraud awareness advisories
+      - FBI IC3 annual report, vishing category
+
+  - id: PF-SE-002
+    name: LLM-operated pig-butchering investment scam
+    family: social_engineering
+    maturity: observed
+    summary: >
+      A conversational agent sustains weeks of rapport-building across messaging
+      apps, then funnels the victim into a fake trading platform. One operator
+      supervises hundreds of concurrent victim relationships instead of a handful.
+    rails: [upi_p2p, imps, neft_rtgs, cross_border, wallet_ppi]
+    stages: [recon, acquisition, execution, cashout]
+    genai_uplift: [conversational_agent, content_generation, target_research, orchestration]
+    victim_surfaces: [consumer, psp]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Bulk messaging-app accounts, often on rented or mule numbers
+      - Fake platform showing fabricated portfolio growth
+      - Mule network for receiving and layering deposits
+    signals: [transaction, sequence, graph, text]
+    network_role: fan_in
+    simulation:
+      entities: [cardholder, beneficiary, mule_account, device]
+      amount_profile: escalating
+      temporal_shape: sustained_campaign
+      duration_days: [21, 120]
+      events_per_campaign: [4, 25]
+      entity_reuse: 0.75
+      notes: >
+        The escalating deposit ramp is the signature: small successful
+        "withdrawal" early to build trust, then monotonically rising deposits.
+    detection_hypotheses:
+      - channel: transaction
+        feature: monotonic_amount_escalation_to_single_beneficiary_cluster
+        rationale: Trust-building ramps are unusually smooth versus organic spend.
+      - channel: sequence
+        feature: victim_payment_cadence_regularisation
+        rationale: >
+          Victims shift from irregular personal spend to a scheduled, coached
+          deposit rhythm.
+      - channel: graph
+        feature: beneficiary_fan_in_from_unrelated_payers
+        rationale: >
+          Many unconnected victims converge on a small set of collection
+          accounts — visible only at graph level.
+      - channel: text
+        feature: llm_generated_rapport_markers_and_platform_urls
+        rationale: >
+          Sustained affective language plus a novel low-reputation trading
+          domain is highly separable from organic chat.
+    mitigations:
+      - Beneficiary-reputation scoring shared across PSPs
+      - Escalating-deposit velocity rules with human review at thresholds
+      - Victim-side nudges on repeated payments to newly registered entities
+    scores: {novelty: 3, impact: 5, scalability: 5, detection_difficulty: 4}
+    references:
+      - Europol IOCTA, investment-fraud chapter
+      - Interpol advisories on romance-investment fraud
+
+  - id: PF-SE-003
+    name: OSINT-enriched smishing at population scale
+    family: social_engineering
+    maturity: observed
+    summary: >
+      Breach corpora are joined to social profiles by an LLM pipeline that emits
+      per-target SMS referencing a real recent purchase, employer or city,
+      defeating the generic-template heuristics that filter classic smishing.
+    rails: [card_cnp, upi_collect, upi_p2m, wallet_ppi]
+    stages: [recon, acquisition]
+    genai_uplift: [content_generation, target_research, orchestration]
+    victim_surfaces: [consumer, merchant]
+    actor_tiers: [opportunist, organized, faas_vendor]
+    preconditions:
+      - Breach data with phone plus at least one contextual attribute
+      - Bulk SMS gateway or spoofed sender ID
+      - Rotating phishing infrastructure
+    signals: [transaction, text, device]
+    simulation:
+      entities: [cardholder, device, merchant]
+      amount_profile: typical
+      temporal_shape: burst
+      duration_days: [1, 7]
+      events_per_campaign: [1, 4]
+      entity_reuse: 0.3
+      notes: >
+        Low events per victim but enormous victim count. Fidelity here is about
+        campaign-level structure, not per-transaction anomaly.
+    detection_hypotheses:
+      - channel: text
+        feature: per_message_entropy_vs_campaign_level_semantic_clustering
+        rationale: >
+          Surface text is unique per victim, but embeddings still cluster by
+          campaign intent — the key insight that defeats naive template matching.
+      - channel: device
+        feature: landing_page_fingerprint_and_tls_cert_age
+        rationale: Phishing infrastructure is young and reused across a campaign.
+      - channel: transaction
+        feature: post_click_cnp_authorisation_within_short_window
+        rationale: Compromise-to-use latency is far shorter than organic card use.
+    mitigations:
+      - Registered-sender enforcement (DLT-style) with tighter template binding
+      - Embedding-space campaign clustering rather than exact-template blocklists
+      - Domain-age gating on payment redirects
+    scores: {novelty: 2, impact: 3, scalability: 5, detection_difficulty: 3}
+    references:
+      - TRAI DLT sender-registration framework
+      - Anti-Phishing Working Group trend reports
+
+  - id: PF-SE-004
+    name: Deepfake video-call executive payment authorisation
+    family: social_engineering
+    maturity: emerging
+    summary: >
+      A finance employee joins a video call with a synthesised CFO and
+      colleagues, and is directed to release an urgent supplier payment. The
+      synthetic participants defeat the callback-verification control that
+      classic business email compromise trained staff to use.
+    rails: [neft_rtgs, cross_border, imps]
+    stages: [recon, acquisition, execution]
+    genai_uplift: [video_synthesis, voice_cloning, target_research, conversational_agent]
+    victim_surfaces: [merchant, consumer, psp]
+    actor_tiers: [organized]
+    preconditions:
+      - Public video/audio of the impersonated executive
+      - Knowledge of internal approval workflow and a plausible supplier
+      - Compromised or lookalike calendar/meeting invite
+    signals: [transaction, sequence, graph]
+    simulation:
+      entities: [corporate_account, beneficiary, device]
+      amount_profile: drain
+      temporal_shape: off_hours
+      duration_days: [1, 3]
+      events_per_campaign: [1, 5]
+      entity_reuse: 0.4
+      notes: >
+        Very low event count, very high value. Contributes tail risk rather
+        than volume — matters for the cost model, not the AUC.
+    detection_hypotheses:
+      - channel: transaction
+        feature: beneficiary_novelty_x_amount_zscore_for_corporate_profile
+        rationale: New high-value supplier outside the established payee set.
+      - channel: sequence
+        feature: approval_latency_compression_vs_policy_baseline
+        rationale: >
+          Urgency coaching compresses the normal multi-day procure-to-pay cycle
+          into minutes.
+      - channel: graph
+        feature: beneficiary_account_age_and_shared_infrastructure
+        rationale: Receiving accounts are recently opened and cluster with other mules.
+    mitigations:
+      - Out-of-band callback on a pre-registered number, never one from the invite
+      - Dual authorisation with independent channel for new payees above threshold
+      - Supplier bank-detail change freeze windows
+    scores: {novelty: 4, impact: 5, scalability: 3, detection_difficulty: 4}
+    references:
+      - FBI IC3 business email compromise advisories
+
+  - id: PF-SE-005
+    name: Generated-content poisoning of customer-support discovery
+    family: social_engineering
+    maturity: emerging
+    summary: >
+      Attackers mass-produce SEO-optimised pages, map listings and AI-assistant
+      answers carrying fraudulent "bank helpline" numbers, so the victim
+      initiates contact and arrives pre-trusting the attacker.
+    rails: [upi_collect, upi_p2p, card_cnp]
+    stages: [recon, acquisition]
+    genai_uplift: [content_generation, orchestration, target_research]
+    victim_surfaces: [consumer, issuer]
+    actor_tiers: [opportunist, organized]
+    preconditions:
+      - Bulk site generation and listing-injection capability
+      - Call-centre capacity or a conversational agent to answer inbound calls
+    signals: [transaction, sequence, text]
+    simulation:
+      entities: [cardholder, beneficiary, device]
+      amount_profile: typical
+      temporal_shape: sustained_campaign
+      duration_days: [7, 90]
+      events_per_campaign: [1, 6]
+      entity_reuse: 0.65
+      notes: >
+        Inbound-initiated, so the victim shows no phishing-click trail — a
+        deliberate blind spot for click-based detection.
+    detection_hypotheses:
+      - channel: text
+        feature: support_number_reputation_and_page_generation_markers
+        rationale: >
+          Bulk-generated support pages share boilerplate structure detectable in
+          embedding space even with varied surface text.
+      - channel: transaction
+        feature: remote_access_app_install_preceding_payment
+        rationale: >
+          These scripts routinely require a screen-sharing app, which is a
+          strong device-side precursor.
+      - channel: sequence
+        feature: victim_initiated_contact_then_rapid_new_payee
+        rationale: Inbound-call cohort still shows the same new-payee-then-drain shape.
+    mitigations:
+      - Verified-helpline registries surfaced in-app rather than via search
+      - Screen-share detection blocking in-session payment approval
+      - Takedown pipelines fed by embedding-clustered page discovery
+    scores: {novelty: 4, impact: 3, scalability: 5, detection_difficulty: 4}
+    references:
+      - RBI advisories on fraudulent customer-care numbers

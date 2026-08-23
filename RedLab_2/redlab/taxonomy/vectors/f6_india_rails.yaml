@@ -1,0 +1,368 @@
+family: india_rails
+description: >
+  Vectors specific to the Indian payments stack. Deliberately over-weighted
+  relative to other families: UPI's scale, its pull-payment semantics, the
+  AutoPay mandate model and AePS have no close analogue in card-centric threat
+  models, and the resulting attack surface is under-represented in the public
+  fraud literature this taxonomy would otherwise inherit.
+
+vectors:
+  - id: PF-IND-001
+    name: Collect-request pretexting at scale
+    family: india_rails
+    maturity: observed
+    summary: >
+      UPI's pull-payment primitive is inverted: victims are sent collect
+      requests framed as incoming refunds, cashbacks or prize credits, and
+      approving with a PIN debits rather than credits them.
+    rails: [upi_collect, upi_p2p]
+    stages: [acquisition, execution]
+    genai_uplift: [content_generation, target_research, conversational_agent, orchestration]
+    victim_surfaces: [consumer, psp]
+    actor_tiers: [opportunist, organized, faas_vendor]
+    preconditions:
+      - Victim VPA or phone number
+      - Pretext delivered by SMS, call or marketplace chat
+    signals: [transaction, sequence, text, graph]
+    network_role: fan_out
+    simulation:
+      entities: [upi_handle, beneficiary, device]
+      amount_profile: typical
+      temporal_shape: burst
+      duration_days: [1, 14]
+      events_per_campaign: [10, 800]
+      entity_reuse: 0.7
+      notes: >
+        Fan-out from few collecting handles to many victims, with a low but
+        non-trivial approval rate — that ratio is the campaign fingerprint.
+    detection_hypotheses:
+      - channel: graph
+        feature: collect_request_fan_out_and_approval_ratio_per_payee_vpa
+        rationale: >
+          Genuine collect usage is narrow and reciprocal; scam handles blast
+          many unrelated payers and convert at a low, characteristic rate.
+      - channel: sequence
+        feature: first_ever_collect_from_unknown_vpa_to_payer
+        rationale: Most victims have never transacted with the requesting handle.
+      - channel: transaction
+        feature: approval_latency_and_amount_roundness
+        rationale: Coached approvals are fast and amounts are unusually round.
+      - channel: text
+        feature: refund_cashback_pretext_language_in_request_note
+        rationale: The remark field carries the pretext and clusters semantically.
+    mitigations:
+      - Restrict or clearly relabel collect requests from unknown handles
+      - Payer-side warning that approving debits the account
+      - Payee-VPA reputation scoring on fan-out and approval ratio
+    scores: {novelty: 3, impact: 4, scalability: 5, detection_difficulty: 3}
+    references:
+      - NPCI UPI circulars on collect-request risk controls
+      - RBI digital-payment fraud advisories
+
+  - id: PF-IND-002
+    name: Deceptive AutoPay mandate creation
+    family: india_rails
+    maturity: emerging
+    summary: >
+      Recurring UPI mandates are established under a misleading pretext — a
+      trial, a verification, a one-rupee check — with generated merchant
+      branding, then debited repeatedly at amounts victims do not monitor.
+    rails: [upi_autopay, nach_emandate]
+    stages: [acquisition, execution, cashout]
+    genai_uplift: [content_generation, orchestration, target_research]
+    victim_surfaces: [consumer, psp, issuer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Merchant or aggregator access to create mandates
+      - Convincing generated brand presentation at consent time
+    signals: [transaction, sequence, graph, text]
+    network_role: fan_in
+    simulation:
+      entities: [upi_handle, merchant, mule_account]
+      amount_profile: just_under_limit
+      temporal_shape: sustained_campaign
+      duration_days: [30, 365]
+      events_per_campaign: [12, 200]
+      entity_reuse: 0.75
+      notes: >
+        Debits sit just below the value at which UPI requires re-authentication
+        — an explicit, learnable threshold behaviour.
+    detection_hypotheses:
+      - channel: transaction
+        feature: mandate_amount_relative_to_reauth_threshold
+        rationale: Clustering immediately below the re-authentication limit is deliberate and visible.
+      - channel: sequence
+        feature: mandate_revocation_rate_and_time_to_first_dispute
+        rationale: >
+          Deceptive mandates show elevated revocation shortly after the first
+          real debit, when victims finally notice.
+      - channel: graph
+        feature: mandate_fan_in_to_shared_settlement_entity
+        rationale: Many unrelated payers mandated to one settlement cluster.
+      - channel: text
+        feature: consent_screen_copy_similarity_across_merchants
+        rationale: Generated consent copy is reused across sibling merchants.
+    mitigations:
+      - Plain-language mandate consent with explicit total-exposure display
+      - Revocation-rate monitoring as a merchant risk metric
+      - Lower re-authentication thresholds for new merchants
+    scores: {novelty: 4, impact: 4, scalability: 5, detection_difficulty: 4}
+    references:
+      - NPCI UPI AutoPay operating guidelines
+      - RBI e-mandate framework for recurring transactions
+
+  - id: PF-IND-003
+    name: QR substitution with generated signage
+    family: india_rails
+    maturity: observed
+    summary: >
+      Merchant QR codes at physical points of sale are overlaid with attacker
+      codes, using generated signage that matches the acquirer's branding
+      closely enough to pass a glance from staff and customers.
+    rails: [upi_p2m, upi_p2p]
+    stages: [staging, execution, cashout]
+    genai_uplift: [content_generation, document_forgery]
+    victim_surfaces: [merchant, consumer]
+    actor_tiers: [opportunist, organized]
+    preconditions:
+      - Physical access to the merchant location
+      - Mule VPA to receive diverted funds
+    signals: [transaction, graph, sequence]
+    network_role: collection_point
+    simulation:
+      entities: [merchant, upi_handle, mule_account]
+      amount_profile: typical
+      temporal_shape: business_hours
+      duration_days: [1, 10]
+      events_per_campaign: [20, 400]
+      entity_reuse: 0.6
+      notes: >
+        Detectable as a geospatial contradiction — merchant-location payers
+        crediting a personal handle with no merchant history.
+    detection_hypotheses:
+      - channel: graph
+        feature: personal_vpa_receiving_merchant_pattern_volume
+        rationale: >
+          A P2P handle acquiring a merchant-shaped payment profile is the core
+          contradiction this attack cannot avoid.
+      - channel: transaction
+        feature: payer_geo_cluster_vs_payee_registration_locality
+        rationale: Payers cluster at a shop location the payee has no link to.
+      - channel: sequence
+        feature: merchant_volume_drop_coincident_with_new_payee_rise
+        rationale: The victim merchant's own volume falls as the attacker's rises.
+    mitigations:
+      - Merchant-side payment confirmation devices (soundbox reconciliation)
+      - Geo-consistency checks between payer cluster and payee profile
+      - Personal-handle volume caps triggering merchant-conversion review
+    scores: {novelty: 2, impact: 3, scalability: 3, detection_difficulty: 3}
+    references:
+      - NPCI merchant QR standards
+      - RBI advisories on QR-code fraud
+
+  - id: PF-IND-004
+    name: AePS biometric replay with synthetic fingerprints
+    family: india_rails
+    maturity: emerging
+    summary: >
+      Aadhaar-enabled cash withdrawals are attacked using fingerprint artefacts
+      reconstructed from leaked or captured impressions and replayed through
+      compromised or emulated capture devices, targeting customers with limited
+      transaction monitoring.
+    rails: [aeps]
+    stages: [acquisition, execution, cashout]
+    genai_uplift: [document_forgery, code_generation]
+    victim_surfaces: [consumer, issuer, kyc_provider]
+    actor_tiers: [organized, insider]
+    preconditions:
+      - Aadhaar number and a usable biometric impression
+      - Compromised or emulated AePS terminal
+      - Operator collusion in many observed cases
+    signals: [biometric, transaction, graph, device]
+    network_role: fan_in
+    simulation:
+      entities: [consumer_account, agent_terminal, device]
+      amount_profile: drain
+      temporal_shape: burst
+      duration_days: [1, 7]
+      events_per_campaign: [2, 30]
+      entity_reuse: 0.7
+      notes: >
+        Terminal-level concentration is the dominant structure — a small number
+        of operator terminals serve a disproportionate share of victims.
+    detection_hypotheses:
+      - channel: biometric
+        feature: fingerprint_liveness_and_image_quality_uniformity
+        rationale: >
+          Replayed artefacts show unnaturally consistent capture quality across
+          supposedly distinct customers and sessions.
+      - channel: graph
+        feature: victim_fan_in_per_agent_terminal
+        rationale: >
+          Compromised terminals accumulate unrelated victims — the highest-lift
+          AePS feature available.
+      - channel: transaction
+        feature: withdrawal_without_prior_deposit_relationship
+        rationale: Victims are frequently dormant accounts with no matching activity.
+      - channel: device
+        feature: terminal_firmware_and_capture_device_attestation
+        rationale: Emulated or tampered capture stacks fail attestation.
+    mitigations:
+      - Mandatory certified, attested capture devices
+      - Terminal-level fan-in monitoring and operator scorecards
+      - Customer-controlled biometric locking
+    scores: {novelty: 3, impact: 4, scalability: 3, detection_difficulty: 4}
+    references:
+      - UIDAI biometric locking and security guidance
+      - NPCI AePS operating circulars
+
+  - id: PF-IND-005
+    name: Agent-managed mule layering network
+    family: india_rails
+    maturity: observed
+    summary: >
+      Proceeds are split across many mule accounts and moved through rapid
+      multi-hop UPI and IMPS transfers, with routing, amounts and timing chosen
+      by an orchestration layer to keep every hop below reporting and velocity
+      thresholds.
+    rails: [upi_p2p, imps, wallet_ppi, neft_rtgs]
+    stages: [cashout, evasion]
+    genai_uplift: [orchestration, adaptive_evasion]
+    victim_surfaces: [psp, issuer, consumer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Pool of mule accounts from PF-SID-005 or rented accounts
+      - Automated control of transfer initiation
+    signals: [graph, sequence, transaction]
+    network_role: layering_hop
+    simulation:
+      entities: [mule_account, beneficiary, upi_handle, device]
+      amount_profile: just_under_limit
+      temporal_shape: burst
+      duration_days: [1, 21]
+      events_per_campaign: [50, 2000]
+      entity_reuse: 0.85
+      notes: >
+        Highest entity reuse in the corpus. This vector exists to make the graph
+        detector earn its place — no tabular model recovers multi-hop layering.
+    detection_hypotheses:
+      - channel: graph
+        feature: multi_hop_flow_conservation_and_community_detection
+        rationale: >
+          Layering preserves value across hops within a tight community — a
+          structural invariant the attacker cannot pace away.
+      - channel: sequence
+        feature: balance_dwell_time_and_pass_through_ratio
+        rationale: Funds arriving and leaving within minutes is the defining mule behaviour.
+      - channel: transaction
+        feature: amount_structuring_below_reporting_thresholds
+        rationale: Threshold-hugging leaves a sharp artefact in the amount distribution.
+    mitigations:
+      - Real-time cross-institution graph analytics
+      - Pass-through-ratio limits on young accounts
+      - Coordinated freeze mechanisms across PSPs
+    scores: {novelty: 3, impact: 5, scalability: 5, detection_difficulty: 4}
+    references:
+      - FATF money-laundering typologies
+      - Indian Cyber Crime Coordination Centre mule-account reporting
+
+  - id: PF-IND-006
+    name: Synthetic law-enforcement coercion ("digital arrest")
+    family: india_rails
+    maturity: observed
+    summary: >
+      Victims are held in prolonged video calls by synthetic police, customs or
+      judicial officials in generated uniforms and offices, and coerced into
+      transferring their savings for "verification" — an attack whose entire
+      cost structure is transformed by real-time video synthesis.
+    rails: [imps, neft_rtgs, upi_p2p, cross_border]
+    stages: [acquisition, execution, cashout]
+    genai_uplift: [video_synthesis, voice_cloning, conversational_agent, target_research]
+    victim_surfaces: [consumer, issuer, psp]
+    actor_tiers: [organized]
+    preconditions:
+      - Victim contact details and often partial identity data
+      - Sustained video-call capability with synthetic participants
+      - Mule network capable of absorbing large single transfers
+    signals: [transaction, sequence, graph]
+    network_role: fan_in
+    simulation:
+      entities: [consumer_account, beneficiary, mule_account]
+      amount_profile: drain
+      temporal_shape: sustained_campaign
+      duration_days: [1, 30]
+      events_per_campaign: [1, 15]
+      entity_reuse: 0.6
+      notes: >
+        Often involves liquidating fixed deposits first — that pre-transfer
+        liquidation is a distinctive and highly detectable precursor.
+    detection_hypotheses:
+      - channel: sequence
+        feature: asset_liquidation_preceding_large_outbound_transfer
+        rationale: >
+          Breaking deposits or redeeming investments immediately before a
+          transfer to a new payee is rare and high-lift.
+      - channel: transaction
+        feature: transfer_magnitude_vs_lifetime_maximum
+        rationale: These transfers typically exceed anything in the victim's history.
+      - channel: graph
+        feature: beneficiary_shared_across_multiple_coerced_victims
+        rationale: Collection accounts recur across victims before being abandoned.
+    mitigations:
+      - Branch and app-level interdiction on liquidation-then-transfer patterns
+      - Mandatory cooling-off on lifetime-maximum transfers to new payees
+      - Public counter-messaging that agencies never demand transfers
+    scores: {novelty: 4, impact: 5, scalability: 4, detection_difficulty: 4}
+    references:
+      - Indian Cyber Crime Coordination Centre public advisories
+      - RBI customer-awareness communications
+
+  - id: PF-IND-007
+    name: Credit-on-UPI limit harvesting
+    family: india_rails
+    maturity: projected
+    summary: >
+      RuPay credit lines linked to UPI are drained through merchant QR payments
+      to attacker-controlled merchant handles, converting revolving credit into
+      cash while presenting as ordinary small-merchant retail spend.
+    rails: [credit_on_upi, upi_p2m]
+    stages: [execution, cashout]
+    genai_uplift: [orchestration, content_generation]
+    victim_surfaces: [issuer, acquirer, consumer]
+    actor_tiers: [organized]
+    preconditions:
+      - Compromised or synthetic account with a linked credit line
+      - Attacker-controlled merchant handle accepting UPI
+    signals: [transaction, graph, sequence]
+    network_role: collection_point
+    simulation:
+      entities: [upi_handle, merchant, mule_account]
+      amount_profile: drain
+      temporal_shape: burst
+      duration_days: [1, 10]
+      events_per_campaign: [5, 80]
+      entity_reuse: 0.65
+      notes: >
+        Credit-funded UPI spend concentrated at one new merchant is the
+        signature; the rail is new enough that baselines are thin.
+      # Included deliberately as a thin-baseline rail - it is a good stress
+      # test for the novelty channel, which cannot rely on historical priors.
+    detection_hypotheses:
+      - channel: transaction
+        feature: credit_funded_share_of_upi_spend_per_user
+        rationale: >
+          Genuine credit-on-UPI usage is mixed with debit funding; harvesting
+          is almost entirely credit-funded.
+      - channel: graph
+        feature: merchant_handle_age_vs_credit_volume_share
+        rationale: New merchant handles taking mostly credit-funded volume is contradictory.
+      - channel: sequence
+        feature: utilisation_exhaustion_rate_after_linkage
+        rationale: Full-limit exhaustion soon after linkage is a rare genuine pattern.
+    mitigations:
+      - Merchant-handle maturity requirements for credit-funded acceptance
+      - Velocity limits on newly linked credit lines
+      - Cash-equivalent-risk scoring for merchant categories on UPI
+    scores: {novelty: 5, impact: 4, scalability: 3, detection_difficulty: 5}
+    references:
+      - NPCI RuPay credit-card-on-UPI circulars
