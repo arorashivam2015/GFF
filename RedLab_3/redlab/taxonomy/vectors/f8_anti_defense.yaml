@@ -1,0 +1,253 @@
+family: anti_defense
+description: >
+  Attacks whose target is the fraud-detection system itself. This family closes
+  the loop conceptually: it is the formal statement of what the D2 adversarial
+  curriculum and the D3 probing agent operationalise. Also held out of primary
+  detector training - a defence that cannot survive being studied is not a
+  defence.
+
+vectors:
+  - id: PF-ADV-001
+    name: Decline-response oracle mining
+    family: anti_defense
+    maturity: emerging
+    summary: >
+      The authorisation response is treated as a free label. An agent submits
+      structured probe transactions, reads approve/decline/step-up outcomes, and
+      reconstructs the decision boundary without any access to the model.
+    rails: [card_cnp, upi_p2m, card_token]
+    stages: [recon, evasion]
+    genai_uplift: [adaptive_evasion, orchestration, code_generation]
+    victim_surfaces: [fraud_model, issuer, acquirer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Ability to submit transactions and observe distinguishable outcomes
+      - Sufficient probe budget before rate limits engage
+    signals: [transaction, sequence, graph]
+    simulation:
+      entities: [card, merchant, device]
+      amount_profile: micro_probe
+      temporal_shape: slow_drip
+      duration_days: [3, 60]
+      events_per_campaign: [100, 5000]
+      entity_reuse: 0.3
+      notes: >
+        Directly implemented by the D3 probing agent, which has query-only
+        access to the deployed detector.
+    detection_hypotheses:
+      - channel: sequence
+        feature: probe_like_feature_space_traversal
+        rationale: >
+          Systematic single-variable sweeps around a threshold are
+          informationally efficient and behaviourally unlike genuine spend.
+      - channel: transaction
+        feature: amount_and_attribute_grid_regularity
+        rationale: Probes tile the feature space with unnatural regularity.
+      - channel: graph
+        feature: coordinated_probing_across_credential_pool
+        rationale: >
+          Probe budget is spread across credentials to evade per-entity limits,
+          leaving a coordinated structure only visible network-side.
+    mitigations:
+      - Response homogenisation so declines leak less information
+      - Randomised decision noise near thresholds
+      - Probe-pattern detection as a first-class model, not a rate limit
+    scores: {novelty: 5, impact: 4, scalability: 4, detection_difficulty: 5}
+    references:
+      - Model-extraction and membership-inference literature
+
+  - id: PF-ADV-002
+    name: Black-box evasion search over mutable features
+    family: anti_defense
+    maturity: emerging
+    summary: >
+      Taking the oracle from PF-ADV-001, an attacker searches the subset of
+      features they actually control — timing, amount, merchant, device
+      presentation — for minimal perturbations that flip a decline to an approve
+      while preserving the fraud's economic value.
+    rails: [card_cnp, upi_p2p, card_token, agentic_checkout]
+    stages: [evasion, execution]
+    genai_uplift: [adaptive_evasion, orchestration]
+    victim_surfaces: [fraud_model, issuer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Approximate knowledge of the boundary
+      - Attack economics that survive the constraints evasion imposes
+    signals: [transaction, sequence, device]
+    simulation:
+      entities: [card, merchant, device, mule_account]
+      amount_profile: just_under_limit
+      temporal_shape: slow_drip
+      duration_days: [3, 45]
+      events_per_campaign: [20, 800]
+      entity_reuse: 0.35
+      notes: >
+        This is the mutation operator of the D2 curriculum. Crucially, evasion
+        is constrained: an attack mutated past the point of profitability is a
+        win for the defence, and the simulator enforces that budget.
+    detection_hypotheses:
+      - channel: transaction
+        feature: distance_to_decision_boundary_distribution
+        rationale: >
+          Evaded traffic piles up just inside the approve region; genuine
+          traffic is diffuse. The pile-up is itself detectable.
+      - channel: sequence
+        feature: feature_mutation_trajectory_across_retries
+        rationale: Retry sequences show directed movement rather than random variation.
+      - channel: device
+        feature: presentation_attribute_churn_per_credential
+        rationale: Rapid churn of controllable device attributes is unnatural.
+    mitigations:
+      - Ensemble diversity so no single boundary is learnable
+      - Monitoring density near the boundary as a drift alarm
+      - Features attackers cannot cheaply control (graph, tenure, cross-institution)
+    scores: {novelty: 5, impact: 4, scalability: 4, detection_difficulty: 5}
+    references:
+      - Adversarial machine-learning literature on black-box evasion
+
+  - id: PF-ADV-003
+    name: Label-supply poisoning via manufactured disputes
+    family: anti_defense
+    maturity: projected
+    summary: >
+      Because supervised fraud models learn from chargeback outcomes, an
+      attacker who can manufacture disputes on legitimate transactions corrupts
+      the training signal itself, degrading the model over successive retrains.
+    rails: [card_cnp, card_token, upi_p2m]
+    stages: [evasion]
+    genai_uplift: [content_generation, orchestration, adaptive_evasion]
+    victim_surfaces: [fraud_model, issuer, merchant]
+    actor_tiers: [organized]
+    preconditions:
+      - Ability to file disputes at volume (see PF-MER-003)
+      - Automated retraining that ingests dispute outcomes without curation
+    signals: [transaction, sequence, text, graph]
+    simulation:
+      entities: [cardholder, merchant, card]
+      amount_profile: typical
+      temporal_shape: sustained_campaign
+      duration_days: [60, 365]
+      events_per_campaign: [50, 1000]
+      entity_reuse: 0.5
+      notes: >
+        Operates on the label column rather than the feature columns, so it is
+        invisible to every input-space defence. Evaluated by measuring detector
+        degradation across retrain generations.
+    detection_hypotheses:
+      - channel: text
+        feature: dispute_narrative_clustering_across_unrelated_claimants
+        rationale: Manufactured disputes share generated structure.
+      - channel: sequence
+        feature: label_flip_rate_drift_per_segment
+        rationale: >
+          A segment whose historical label distribution shifts abruptly is
+          either real drift or poisoning, and both need investigation.
+      - channel: graph
+        feature: claimant_cluster_overlap_by_device_and_instrument
+        rationale: Coordinated claimants share infrastructure.
+      - channel: transaction
+        feature: disputed_transaction_risk_score_distribution_anomaly
+        rationale: >
+          Poisoned labels attach to transactions the model already scored as
+          low-risk, producing a distinctive score/label contradiction.
+    mitigations:
+      - Curated, sampled ground truth alongside dispute-derived labels
+      - Label-provenance tracking and influence-based outlier removal
+      - Retraining gates on label-distribution drift
+    scores: {novelty: 5, impact: 4, scalability: 3, detection_difficulty: 5}
+    references:
+      - Data-poisoning and label-flipping literature
+
+  - id: PF-ADV-004
+    name: Surrogate-model extraction
+    family: anti_defense
+    maturity: projected
+    summary: >
+      Probe responses are distilled into a local surrogate of the defender's
+      model, which is then attacked offline at unlimited scale, so that only
+      high-confidence evasions are ever submitted to the real system.
+    rails: [card_cnp, upi_p2m, card_token]
+    stages: [recon, evasion]
+    genai_uplift: [orchestration, adaptive_evasion, code_generation]
+    victim_surfaces: [fraud_model, issuer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Probe corpus from PF-ADV-001
+      - Compute to train a surrogate
+    signals: [transaction, sequence, graph]
+    simulation:
+      entities: [card, merchant, device]
+      amount_profile: micro_probe
+      temporal_shape: slow_drip
+      duration_days: [14, 120]
+      events_per_campaign: [500, 20000]
+      entity_reuse: 0.25
+      notes: >
+        The dangerous property is efficiency: online footprint drops sharply
+        once the surrogate is trained, so probe volume *falling* is a warning.
+    detection_hypotheses:
+      - channel: sequence
+        feature: probe_volume_decay_followed_by_precision_attack_onset
+        rationale: >
+          The transition from broad probing to narrowly successful attacks is
+          the observable signature of extraction completing.
+      - channel: transaction
+        feature: attack_success_rate_step_change
+        rationale: Success rate jumps discontinuously once the surrogate is in use.
+      - channel: graph
+        feature: probe_and_attack_infrastructure_overlap
+        rationale: Probing and exploitation reuse infrastructure despite the time gap.
+    mitigations:
+      - Query budgeting and anomaly detection on probe-shaped traffic
+      - Periodic model rotation invalidating surrogates
+      - Stochastic decisioning to raise extraction cost
+    scores: {novelty: 5, impact: 3, scalability: 3, detection_difficulty: 5}
+    references:
+      - Model-extraction attack literature
+
+  - id: PF-ADV-005
+    name: Slow drift injection against adaptive baselines
+    family: anti_defense
+    maturity: projected
+    summary: >
+      Attackers exploit the defence's own adaptivity, injecting benign traffic
+      that gradually shifts a segment's behavioural baseline until previously
+      anomalous activity is normalised by the model's own retraining.
+    rails: [upi_p2p, card_cnp, upi_p2m]
+    stages: [staging, evasion]
+    genai_uplift: [orchestration, adaptive_evasion]
+    victim_surfaces: [fraud_model, issuer, psp]
+    actor_tiers: [organized]
+    preconditions:
+      - Detector with adaptive or frequently retrained baselines
+      - Patience and volume to move a segment's statistics
+    signals: [transaction, sequence, graph]
+    simulation:
+      entities: [mule_account, merchant, card, device]
+      amount_profile: escalating
+      temporal_shape: sustained_campaign
+      duration_days: [90, 400]
+      events_per_campaign: [200, 5000]
+      entity_reuse: 0.6
+      notes: >
+        Requires the simulator to model detector retraining over time, which is
+        exactly what the D2 loop provides.
+    detection_hypotheses:
+      - channel: sequence
+        feature: segment_baseline_drift_rate_vs_population
+        rationale: >
+          A segment drifting faster than the population, without a business
+          explanation, is either a product change or an attack.
+      - channel: transaction
+        feature: synthetic_benign_traffic_share_estimate
+        rationale: Injected benign traffic is unusually low-variance.
+      - channel: graph
+        feature: new_entity_influx_concentration_in_drifting_segment
+        rationale: Drift is driven by an influx of related new entities.
+    mitigations:
+      - Anchored reference baselines that adaptivity cannot move
+      - Drift-rate alarms with mandatory human adjudication
+      - Champion/challenger with a frozen champion for comparison
+    scores: {novelty: 5, impact: 3, scalability: 3, detection_difficulty: 5}
+    references:
+      - Concept-drift and adaptive-model security literature
