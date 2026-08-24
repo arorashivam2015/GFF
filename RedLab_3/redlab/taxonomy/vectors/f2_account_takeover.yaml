@@ -1,0 +1,240 @@
+family: account_takeover
+description: >
+  The attacker becomes the customer. GenAI uplift is concentrated in the
+  human-in-the-loop steps that previously bottlenecked ATO — pretexting a call
+  centre, defeating a step-up challenge, or driving a session convincingly
+  enough to look like the real user.
+
+vectors:
+  - id: PF-ATO-001
+    name: Voice-synthesised SIM-swap pretexting
+    family: account_takeover
+    maturity: emerging
+    summary: >
+      An agent generates a per-target pretext from breach data and executes the
+      telco retention-desk call with a cloned voice, porting the number and
+      thereby capturing every SMS OTP downstream.
+    rails: [upi_p2p, imps, card_cnp, wallet_ppi]
+    stages: [recon, acquisition, execution]
+    genai_uplift: [voice_cloning, target_research, conversational_agent]
+    victim_surfaces: [consumer, issuer, psp]
+    actor_tiers: [organized, insider]
+    preconditions:
+      - Partial KYC answers from breach data
+      - Telco process weakness or an insider at the retention desk
+    signals: [transaction, sequence, device]
+    simulation:
+      entities: [cardholder, device, beneficiary]
+      amount_profile: drain
+      temporal_shape: burst
+      duration_days: [1, 2]
+      events_per_campaign: [3, 15]
+      entity_reuse: 0.5
+      notes: Device change immediately precedes a short, total-drain window.
+    detection_hypotheses:
+      - channel: device
+        feature: sim_change_recency_and_device_binding_break
+        rationale: >
+          Telco SIM-swap age is the highest-precision ATO feature available to
+          an issuer, where the signal is contracted for.
+      - channel: sequence
+        feature: credential_reset_then_payee_add_then_drain_within_hours
+        rationale: The reset-add-drain triple is a near-deterministic ATO grammar.
+      - channel: transaction
+        feature: balance_fraction_moved_in_window
+        rationale: Genuine users rarely move most of a balance in one session.
+    mitigations:
+      - SIM-swap age checks gating high-risk actions
+      - Device-binding re-attestation on payee addition
+      - Delay windows on post-reset payee changes
+    scores: {novelty: 3, impact: 5, scalability: 3, detection_difficulty: 3}
+    references:
+      - GSMA fraud advisories on SIM-swap
+
+  - id: PF-ATO-002
+    name: Behaviour-shaped credential stuffing
+    family: account_takeover
+    maturity: emerging
+    summary: >
+      Rather than replaying credentials at machine speed, an agent generates
+      humanlike dwell, scroll, typing-cadence and navigation traces per attempt,
+      specifically to defeat behavioural-biometric and bot-detection layers.
+    rails: [card_cnp, wallet_ppi, upi_p2m]
+    stages: [acquisition, evasion]
+    genai_uplift: [code_generation, adaptive_evasion, orchestration]
+    victim_surfaces: [consumer, merchant, psp]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Credential corpus from prior breaches
+      - Residential proxy pool
+      - Feedback on which attempts triggered a challenge
+    signals: [device, sequence, transaction]
+    simulation:
+      entities: [cardholder, device, merchant]
+      amount_profile: micro_probe
+      temporal_shape: slow_drip
+      duration_days: [3, 30]
+      events_per_campaign: [50, 2000]
+      entity_reuse: 0.2
+      notes: >
+        Deliberately low entity reuse and paced below per-IP rate limits; the
+        signal survives only in aggregate.
+    detection_hypotheses:
+      - channel: device
+        feature: behavioural_biometric_naturalness_score
+        rationale: >
+          Synthesised traces are too self-consistent — variance of variance is
+          lower than in genuine human input.
+      - channel: sequence
+        feature: login_success_ratio_per_asn_over_rolling_window
+        rationale: Aggregate success ratio betrays stuffing even when each session looks clean.
+      - channel: transaction
+        feature: dormant_account_reactivation_then_immediate_spend
+        rationale: Successful stuffing hits accounts with no recent genuine activity.
+    mitigations:
+      - Population-level anomaly detection on login-outcome ratios per ASN/ISP
+      - Passkey and device-bound credential migration
+      - Adaptive challenge on dormancy-break plus spend
+    scores: {novelty: 4, impact: 3, scalability: 5, detection_difficulty: 4}
+    references:
+      - OWASP automated-threat taxonomy (credential stuffing)
+
+  - id: PF-ATO-003
+    name: Adaptive adversary-in-the-middle OTP relay
+    family: account_takeover
+    maturity: observed
+    summary: >
+      A reverse-proxy phishing kit renders a pixel-accurate issuer login page
+      regenerated on the fly by a code-generation model whenever the real site
+      changes, relaying OTP and session cookies in real time.
+    rails: [card_cnp, upi_p2m, wallet_ppi, card_token]
+    stages: [acquisition, execution, evasion]
+    genai_uplift: [code_generation, content_generation, adaptive_evasion]
+    victim_surfaces: [consumer, issuer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Victim traffic driven by smishing or search ads
+      - Proxy infrastructure able to relay within the OTP validity window
+    signals: [device, sequence, transaction]
+    simulation:
+      entities: [cardholder, device, merchant]
+      amount_profile: drain
+      temporal_shape: burst
+      duration_days: [1, 3]
+      events_per_campaign: [2, 12]
+      entity_reuse: 0.35
+      notes: Session token is valid, so the fraud is invisible to credential checks.
+    detection_hypotheses:
+      - channel: device
+        feature: tls_fingerprint_and_ip_geo_mismatch_vs_declared_client
+        rationale: >
+          Relayed sessions originate from proxy infrastructure that does not
+          match the client the user is really on.
+      - channel: sequence
+        feature: session_reuse_from_two_network_paths
+        rationale: The same session token appearing from two distinct paths is near-conclusive.
+      - channel: transaction
+        feature: post_auth_payee_add_latency
+        rationale: Attackers monetise stolen sessions far faster than users act.
+    mitigations:
+      - Phishing-resistant authentication bound to origin (FIDO2/passkeys)
+      - Token binding to TLS/device fingerprint
+      - Anomalous-session-path alerting
+    scores: {novelty: 3, impact: 4, scalability: 4, detection_difficulty: 4}
+    references:
+      - CISA guidance on phishing-resistant MFA
+
+  - id: PF-ATO-004
+    name: Agentic browser session hijack to silent checkout
+    family: account_takeover
+    maturity: projected
+    summary: >
+      With a stolen session, an autonomous browser agent navigates the
+      merchant's real UI to place orders, adapting to layout changes and CAPTCHAs
+      without the fixed request signatures that scripted carding produces.
+    rails: [card_cnp, card_token, agentic_checkout]
+    stages: [execution, evasion]
+    genai_uplift: [orchestration, code_generation, adaptive_evasion]
+    victim_surfaces: [consumer, merchant, psp]
+    actor_tiers: [organized]
+    preconditions:
+      - Valid session cookie or saved-card credential
+      - Computer-use-capable agent driving a real browser
+    signals: [device, sequence, transaction, agent_trace]
+    simulation:
+      entities: [cardholder, merchant, device]
+      amount_profile: typical
+      temporal_shape: burst
+      duration_days: [1, 4]
+      events_per_campaign: [2, 20]
+      entity_reuse: 0.45
+      notes: >
+        Traffic is genuine-browser and genuine-session; only pacing and
+        goal-directedness differ from the account owner.
+    detection_hypotheses:
+      - channel: agent_trace
+        feature: navigation_optimality_and_absence_of_exploratory_browsing
+        rationale: >
+          Humans browse; agents path-find. Near-zero backtracking is a strong
+          automation tell.
+      - channel: device
+        feature: input_event_timing_distribution
+        rationale: Synthetic input lacks human micro-jitter even when jitter is injected.
+      - channel: sequence
+        feature: shipping_address_novelty_with_expedited_delivery
+        rationale: Reshipping-mule addresses recur across otherwise unrelated accounts.
+      - channel: transaction
+        feature: saved_credential_use_without_prior_session_activity
+        rationale: Checkout with no preceding browse history is atypical for the real owner.
+    mitigations:
+      - Step-up on new shipping address plus expedited shipping
+      - Agent-attestation signals distinguishing sanctioned from unsanctioned automation
+      - Behavioural gating at checkout rather than login only
+    scores: {novelty: 5, impact: 4, scalability: 4, detection_difficulty: 5}
+    references:
+      - OWASP automated-threat taxonomy (scalping, carding)
+
+  - id: PF-ATO-005
+    name: Synthetic-voice defeat of IVR voiceprint recovery
+    family: account_takeover
+    maturity: emerging
+    summary: >
+      Account-recovery flows that authenticate by voiceprint are attacked with a
+      clone built from short public audio, converting a "something you are"
+      factor into a replayable artefact.
+    rails: [card_cnp, imps, upi_p2p]
+    stages: [acquisition, evasion]
+    genai_uplift: [voice_cloning, target_research]
+    victim_surfaces: [consumer, issuer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - 10-60 seconds of the target's speech
+      - Issuer offering voice-based recovery or telephone banking
+    signals: [biometric, sequence, transaction]
+    simulation:
+      entities: [cardholder, device, beneficiary]
+      amount_profile: drain
+      temporal_shape: burst
+      duration_days: [1, 2]
+      events_per_campaign: [1, 8]
+      entity_reuse: 0.5
+      notes: Recovery event is the pivot; downstream looks like ordinary ATO.
+    detection_hypotheses:
+      - channel: biometric
+        feature: replay_and_synthesis_liveness_score
+        rationale: >
+          Anti-spoof models score channel artefacts (codec, room impulse) rather
+          than speaker identity, which cloning does not reproduce.
+      - channel: sequence
+        feature: recovery_event_then_high_risk_action_latency
+        rationale: Legitimate recovery is rarely followed within minutes by a drain.
+      - channel: transaction
+        feature: post_recovery_beneficiary_novelty
+        rationale: Recovered accounts paying brand-new payees is a high-lift combination.
+    mitigations:
+      - Deploy synthetic-speech detection alongside speaker verification
+      - Treat voice as an identifier, never a sole authenticator
+      - Post-recovery cooling-off on payee changes
+    scores: {novelty: 4, impact: 4, scalability: 3, detection_difficulty: 4}
+    references:
+      - NIST biometric presentation-attack-detection framing (ISO/IEC 30107)
