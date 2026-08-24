@@ -49,7 +49,7 @@ cols = [c for c in cols if c not in ("mcc", "channel")]  # keep the linear model
 # temporal cutoff - a straight temporal split leaves zero of their fraud in
 # the test set, which tests nothing. This solution's question is "does
 # institutional silo-ing hurt detection of cross-institution attacks," not
-# "does the model generalise across time" (that's RedLab_1's and RedLab_3's
+# "does the model generalise across time" (that's RedLab_1's and RedLab_6's
 # question) - so these two vectors are split 70/30 on their OWN events,
 # stratified, guaranteeing both sides see real examples; everything else
 # still uses the temporal split for the general training population.

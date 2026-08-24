@@ -1,4 +1,4 @@
-"""Build RedLab_4's short-form solution walkthrough. Deliberately compact,
+"""Build RedLab_7's short-form solution walkthrough. Deliberately compact,
 matching this solution's scope."""
 import pathlib
 import sys
@@ -107,7 +107,7 @@ for _ in range(5):
     doc.add_paragraph()
 t = doc.add_paragraph()
 t.alignment = WD_ALIGN_PARAGRAPH.CENTER
-r = t.add_run("RedLab_4")
+r = t.add_run("RedLab_7")
 r.font.size = Pt(38)
 r.bold = True
 r.font.color.rgb = NAVY
@@ -127,8 +127,8 @@ for _ in range(2):
 meta = doc.add_paragraph()
 meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
 r = meta.add_run("Mastercard Innovation Challenge @ GFF 2026\n"
-                "Fourth entry in a multi-solution portfolio - see RedLab_1 (primary), "
-                "RedLab_2 and RedLab_3 for the other entries")
+                "One entry in a multi-solution portfolio - see RedLab_1 (primary), "
+                "RedLab_2 and RedLab_6 for the other entries")
 r.font.size = Pt(10.5)
 r.font.color.rgb = GRAY
 doc.add_page_break()
@@ -145,7 +145,7 @@ body(doc,
     "unrealistic fully-centralized one, against the realistic status quo of institutions that "
     "never collaborate at all.")
 body(doc,
-    "Scoped deliberately small, same discipline as RedLab_3: Identify and Generate are reused "
+    "Scoped deliberately small, same discipline as RedLab_6: Identify and Generate are reused "
     "wholesale from RedLab_1. The new work is entirely in Defend - institution partitioning, "
     "local-only models, one round of federated coefficient averaging, and a centralized-oracle "
     "upper bound, compared on the identical cross-institution test set. No adversarial loop, "
@@ -245,6 +245,6 @@ table(doc, ["Step", "Command"], [
 body(doc, "World, taxonomy, and features are generated the same way as RedLab_1 - see that "
     "solution's README for the underlying generation commands.", italic=True)
 
-OUT = ROOT / "RedLab_4.docx"
+OUT = ROOT / "RedLab_7.docx"
 doc.save(str(OUT))
 print(f"SAVED: {OUT}  ({OUT.stat().st_size/1024:.0f} KB)")
