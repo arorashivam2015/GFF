@@ -1,0 +1,254 @@
+family: card_testing
+description: >
+  High-volume automated probing of payment credentials and the controls around
+  them. This family is where adaptive evasion is most measurable, because the
+  attacker receives a clean, immediate signal — the authorisation response — on
+  every attempt. That feedback channel is what PF-ADV-001 generalises.
+
+vectors:
+  - id: PF-CT-001
+    name: Adaptive distributed BIN enumeration
+    family: card_testing
+    maturity: observed
+    summary: >
+      Card numbers are validated across a wide merchant surface while an
+      orchestration layer continuously reshapes rate, geography, merchant mix
+      and amount to stay beneath each acquirer's velocity thresholds.
+    rails: [card_cnp, card_token]
+    stages: [recon, acquisition, evasion]
+    genai_uplift: [adaptive_evasion, orchestration, code_generation]
+    victim_surfaces: [issuer, acquirer, merchant]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Candidate PAN ranges
+      - Many low-friction merchant endpoints
+      - Proxy pool with geographic spread
+    signals: [transaction, sequence, graph, device]
+    simulation:
+      entities: [card, merchant, device]
+      amount_profile: micro_probe
+      temporal_shape: slow_drip
+      duration_days: [1, 21]
+      events_per_campaign: [200, 20000]
+      entity_reuse: 0.25
+      notes: >
+        The canonical adversarial-curriculum vector: the generator can tune rate
+        and spread directly against detector feedback in the D2 loop.
+    detection_hypotheses:
+      - channel: sequence
+        feature: decline_ratio_and_amount_entropy_per_merchant_window
+        rationale: >
+          Testing produces abnormally high decline ratios with abnormally low
+          amount diversity, even when paced slowly.
+      - channel: graph
+        feature: bin_concentration_across_merchant_device_bipartite
+        rationale: >
+          Per-merchant volume can stay under threshold while network-level BIN
+          concentration remains extreme — this is the detector the attacker
+          cannot pace around.
+      - channel: transaction
+        feature: sequential_pan_proximity_within_bin
+        rationale: Enumerated PANs are numerically clustered.
+      - channel: device
+        feature: asn_diversity_vs_fingerprint_homogeneity
+        rationale: Wide IP spread with narrow device fingerprint variety is contradictory.
+    mitigations:
+      - Network-level (not merchant-level) BIN-velocity monitoring
+      - Zero-value-authorisation rate limits
+      - Sharing of tested-PAN lists across acquirers
+    scores: {novelty: 3, impact: 3, scalability: 5, detection_difficulty: 4}
+    references:
+      - Card-network card-testing prevention bulletins
+
+  - id: PF-CT-002
+    name: Token-provisioning takeover
+    family: card_testing
+    maturity: emerging
+    summary: >
+      A stolen PAN is provisioned into a wallet on the attacker's device by
+      defeating the issuer's identification-and-verification step, yielding a
+      token that survives PAN reissuance and carries wallet-grade trust.
+    rails: [card_token, card_cp, card_cnp]
+    stages: [staging, execution, evasion]
+    genai_uplift: [voice_cloning, conversational_agent, target_research]
+    victim_surfaces: [issuer, consumer]
+    actor_tiers: [organized]
+    preconditions:
+      - PAN plus enough PII to pass step-up
+      - Yellow-path verification reachable by call centre or OTP interception
+    signals: [transaction, device, sequence, graph]
+    simulation:
+      entities: [card, device, merchant]
+      amount_profile: escalating
+      temporal_shape: burst
+      duration_days: [1, 14]
+      events_per_campaign: [5, 60]
+      entity_reuse: 0.4
+      notes: >
+        Post-provisioning spend carries high token-assurance scores, so it
+        arrives pre-trusted — the defence must catch it at provisioning.
+    detection_hypotheses:
+      - channel: device
+        feature: provisioning_device_novelty_and_geo_delta_vs_cardholder
+        rationale: Provisioning device is new and geographically inconsistent with the cardholder.
+      - channel: sequence
+        feature: provision_to_first_spend_latency_and_ramp
+        rationale: Attackers ramp within hours; genuine users provision and spend organically.
+      - channel: transaction
+        feature: token_assurance_level_vs_realised_fraud_rate
+        rationale: >
+          A rising fraud rate within a high-assurance token cohort is itself the
+          alarm that the verification step is compromised.
+      - channel: graph
+        feature: multiple_pans_provisioned_to_one_device
+        rationale: Device-level PAN fan-in is a strong provisioning-fraud signal.
+    mitigations:
+      - Strengthen yellow-path ID&V beyond SMS OTP
+      - Device-reputation checks at provisioning time
+      - Cohort fraud-rate monitoring by assurance level
+    scores: {novelty: 4, impact: 4, scalability: 3, detection_difficulty: 4}
+    references:
+      - EMVCo payment-tokenisation specification
+      - Card-network digital-wallet provisioning guidance
+
+  - id: PF-CT-003
+    name: Systematic 3DS exemption and challenge farming
+    family: card_testing
+    maturity: emerging
+    summary: >
+      An agent probes the boundaries of risk-based authentication — low-value
+      exemptions, transaction-risk-analysis thresholds, merchant-initiated
+      flags — to discover the routes that reliably avoid a challenge.
+    rails: [card_cnp, card_token]
+    stages: [recon, evasion, execution]
+    genai_uplift: [adaptive_evasion, orchestration]
+    victim_surfaces: [issuer, acquirer, fraud_model]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Stolen credentials
+      - Merchant surface with varied 3DS configurations
+    signals: [transaction, sequence, device]
+    simulation:
+      entities: [card, merchant, device]
+      amount_profile: just_under_limit
+      temporal_shape: slow_drip
+      duration_days: [3, 45]
+      events_per_campaign: [50, 1500]
+      entity_reuse: 0.3
+      notes: >
+        Amounts cluster immediately beneath exemption thresholds — a sharp,
+        learnable distributional artefact.
+    detection_hypotheses:
+      - channel: transaction
+        feature: amount_clustering_below_exemption_thresholds
+        rationale: >
+          Threshold-hugging produces a spike in the amount histogram that
+          genuine spend never shows.
+      - channel: sequence
+        feature: frictionless_route_share_per_card_over_time
+        rationale: Cards routed frictionlessly far more often than population baseline are being steered.
+      - channel: device
+        feature: merchant_hopping_after_challenge_event
+        rationale: A challenge triggers immediate migration to a softer endpoint.
+    mitigations:
+      - Randomised challenge injection to break threshold learnability
+      - Cross-merchant exemption-usage monitoring per credential
+      - Dynamic thresholds rather than fixed published limits
+    scores: {novelty: 4, impact: 3, scalability: 4, detection_difficulty: 4}
+    references:
+      - EMV 3-D Secure specification
+      - PSD2 SCA exemption framework
+
+  - id: PF-CT-004
+    name: Low-friction-MCC card validation
+    family: card_testing
+    maturity: observed
+    summary: >
+      Micro-donations to charities and other low-scrutiny categories are used to
+      validate stolen cards, exploiting the fact that these merchants have weak
+      fraud controls and rarely dispute.
+    rails: [card_cnp]
+    stages: [acquisition, evasion]
+    genai_uplift: [orchestration, code_generation, target_research]
+    victim_surfaces: [merchant, issuer]
+    actor_tiers: [opportunist, organized]
+    preconditions:
+      - Candidate PAN list
+      - Donation or micro-payment endpoints without velocity controls
+    signals: [transaction, sequence, graph]
+    simulation:
+      entities: [card, merchant, device]
+      amount_profile: micro_probe
+      temporal_shape: burst
+      duration_days: [1, 5]
+      events_per_campaign: [100, 5000]
+      entity_reuse: 0.2
+      notes: Extremely low amounts with high approval-then-abandon rates.
+    detection_hypotheses:
+      - channel: transaction
+        feature: sub_threshold_amount_share_at_merchant
+        rationale: Validation traffic concentrates at the very bottom of the amount range.
+      - channel: sequence
+        feature: approval_then_no_repeat_donor_behaviour
+        rationale: Genuine donors return; validated cards never do.
+      - channel: graph
+        feature: card_fan_out_to_single_low_risk_merchant
+        rationale: Thousands of distinct PANs converging on one small merchant is anomalous.
+    mitigations:
+      - Minimum-amount and velocity controls on donation endpoints
+      - Non-profit-sector fraud-tooling programmes
+      - Cross-network tested-PAN blocklisting
+    scores: {novelty: 2, impact: 2, scalability: 5, detection_difficulty: 3}
+    references:
+      - Card-network card-testing prevention bulletins
+
+  - id: PF-CT-005
+    name: Self-writing checkout automation across long-tail merchants
+    family: card_testing
+    maturity: projected
+    summary: >
+      Instead of maintaining brittle per-merchant scripts, a code-generation
+      agent inspects each unfamiliar checkout page and writes a working
+      automation on the fly, so the attackable surface becomes every small
+      merchant rather than the few worth scripting by hand.
+    rails: [card_cnp, agentic_checkout]
+    stages: [execution, evasion]
+    genai_uplift: [code_generation, orchestration, adaptive_evasion]
+    victim_surfaces: [merchant, acquirer, psp]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Stolen credentials
+      - Agent able to parse arbitrary checkout DOMs
+    signals: [transaction, device, sequence, graph]
+    simulation:
+      entities: [card, merchant, device]
+      amount_profile: typical
+      temporal_shape: slow_drip
+      duration_days: [7, 60]
+      events_per_campaign: [20, 500]
+      entity_reuse: 0.15
+      notes: >
+        Very wide, very thin merchant spread — defeats any per-merchant
+        threshold and is only visible network-side.
+    detection_hypotheses:
+      - channel: graph
+        feature: card_to_merchant_spread_breadth_per_unit_time
+        rationale: >
+          One credential touching many unrelated small merchants quickly is
+          implausible for a genuine cardholder.
+      - channel: device
+        feature: headless_and_automation_framework_indicators
+        rationale: Generated automation still runs in instrumentable browser stacks.
+      - channel: transaction
+        feature: first_time_merchant_share_per_credential
+        rationale: Genuine spend concentrates in familiar merchants.
+      - channel: sequence
+        feature: inter_merchant_interval_regularity
+        rationale: Machine pacing is more regular than human shopping cadence.
+    mitigations:
+      - Network-side credential-spread monitoring
+      - Automation-attestation signals at checkout
+      - Shared small-merchant fraud tooling
+    scores: {novelty: 5, impact: 3, scalability: 5, detection_difficulty: 5}
+    references:
+      - OWASP automated-threat taxonomy
