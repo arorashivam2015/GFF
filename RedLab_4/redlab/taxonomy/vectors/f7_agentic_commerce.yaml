@@ -1,0 +1,247 @@
+family: agentic_commerce
+description: >
+  Attacks against autonomous agents that hold spending authority. This family is
+  the frontier of the taxonomy: it is where the *victim* is software rather than
+  a person, and where the classical assumption that a human reviewed the
+  checkout no longer holds. Held out of detector training in the primary
+  evaluation, so that reported performance reflects genuinely unseen attacks.
+
+vectors:
+  - id: PF-AGC-001
+    name: Merchant-page prompt injection of a buying agent
+    family: agentic_commerce
+    maturity: projected
+    summary: >
+      Hidden instructions embedded in product pages, reviews or structured data
+      redirect a shopping agent to add items, change quantity, apply an
+      attacker's payment destination or approve out-of-policy spend.
+    rails: [agentic_checkout, card_token, card_cnp]
+    stages: [acquisition, execution]
+    genai_uplift: [prompt_injection, content_generation, target_research]
+    victim_surfaces: [ai_agent, consumer, merchant]
+    actor_tiers: [opportunist, organized]
+    preconditions:
+      - Attacker-controlled content within the agent's retrieval context
+      - Agent with payment authority and insufficient instruction isolation
+    signals: [agent_trace, transaction, text, sequence]
+    simulation:
+      entities: [ai_agent, merchant, cardholder, device]
+      amount_profile: escalating
+      temporal_shape: burst
+      duration_days: [1, 7]
+      events_per_campaign: [1, 20]
+      entity_reuse: 0.4
+      notes: >
+        Simulated as agent traces plus resulting transactions: the divergence
+        between the user's stated intent and the executed basket is the label.
+    detection_hypotheses:
+      - channel: agent_trace
+        feature: intent_to_action_divergence_score
+        rationale: >
+          The purchase deviates from the user's stated goal — comparing the
+          original instruction to the executed action is the most direct signal
+          available, and has no analogue in human-initiated commerce.
+      - channel: text
+        feature: injected_instruction_detection_in_retrieved_content
+        rationale: Imperative instruction patterns in product content are anomalous.
+      - channel: transaction
+        feature: basket_composition_vs_user_purchase_history
+        rationale: Injected purchases are unrelated to the principal's history.
+      - channel: sequence
+        feature: agent_policy_override_frequency
+        rationale: Repeated boundary-pushing against spend policy indicates manipulation.
+    mitigations:
+      - Strict separation of retrieved content from instruction context
+      - Signed intent binding the mandate to the user's original request
+      - Out-of-band confirmation for spend outside the stated intent
+    scores: {novelty: 5, impact: 4, scalability: 4, detection_difficulty: 5}
+    references:
+      - OWASP Top 10 for LLM applications (prompt injection)
+
+  - id: PF-AGC-002
+    name: Spoofed merchant endpoint harvesting agent credentials
+    family: agentic_commerce
+    maturity: projected
+    summary: >
+      Sites built specifically to be discovered by agents rather than humans
+      present machine-optimised offers and capture the payment credentials or
+      delegated mandates the agent presents at checkout.
+    rails: [agentic_checkout, card_token]
+    stages: [staging, acquisition]
+    genai_uplift: [content_generation, code_generation, target_research]
+    victim_surfaces: [ai_agent, consumer, psp]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Agent discovery surface reachable without human curation
+      - Agent that transacts with unverified counterparties
+    signals: [agent_trace, transaction, graph, device]
+    simulation:
+      entities: [ai_agent, merchant, device, mule_account]
+      amount_profile: typical
+      temporal_shape: sustained_campaign
+      duration_days: [7, 90]
+      events_per_campaign: [5, 200]
+      entity_reuse: 0.5
+      notes: Merchant fleet is young and machine-targeted rather than human-marketed.
+    detection_hypotheses:
+      - channel: graph
+        feature: merchant_traffic_composed_almost_entirely_of_agents
+        rationale: >
+          A merchant with no human traffic but heavy agent traffic is an
+          unambiguous structural anomaly.
+      - channel: agent_trace
+        feature: counterparty_verification_status_at_checkout
+        rationale: Transacting with unverified merchants is the precondition being exploited.
+      - channel: transaction
+        feature: price_outlier_versus_market_for_sku
+        rationale: Bait pricing must beat the market to win agent selection.
+      - channel: device
+        feature: hosting_fingerprint_shared_across_merchant_fleet
+        rationale: Fleets share infrastructure.
+    mitigations:
+      - Merchant-verification registries agents are required to consult
+      - Network-issued merchant identity credentials
+      - Price-outlier gating on agent-selected merchants
+    scores: {novelty: 5, impact: 4, scalability: 5, detection_difficulty: 4}
+    references:
+      - Emerging agentic-commerce protocol and trust-registry proposals
+
+  - id: PF-AGC-003
+    name: Delegated-mandate scope escalation
+    family: agentic_commerce
+    maturity: projected
+    summary: >
+      An attacker manipulates an agent into requesting, or a user into granting,
+      a payment mandate far broader than the task requires — then exploits the
+      residual authority long after the original task has completed.
+    rails: [agentic_checkout, card_token, upi_autopay, nach_emandate]
+    stages: [acquisition, execution, evasion]
+    genai_uplift: [prompt_injection, conversational_agent, orchestration]
+    victim_surfaces: [ai_agent, consumer, issuer]
+    actor_tiers: [organized]
+    preconditions:
+      - Delegated-authority model with coarse-grained scopes
+      - Weak binding between mandate scope and task
+    signals: [agent_trace, transaction, sequence]
+    simulation:
+      entities: [ai_agent, cardholder, merchant]
+      amount_profile: escalating
+      temporal_shape: slow_drip
+      duration_days: [7, 180]
+      events_per_campaign: [3, 60]
+      entity_reuse: 0.45
+      notes: Exploitation is deliberately delayed to break temporal correlation with grant.
+    detection_hypotheses:
+      - channel: agent_trace
+        feature: mandate_scope_to_task_requirement_ratio
+        rationale: >
+          Authority far exceeding what the task needs is measurable at grant
+          time — the cheapest place to intervene.
+      - channel: sequence
+        feature: mandate_dormancy_then_use_latency
+        rationale: Long-dormant mandates reactivating is a strong misuse signal.
+      - channel: transaction
+        feature: spend_outside_original_task_category
+        rationale: Residual authority is spent on unrelated categories.
+    mitigations:
+      - Task-scoped, short-lived, amount-bounded mandates
+      - Automatic expiry on task completion
+      - Dormancy-break challenges on delegated authority
+    scores: {novelty: 5, impact: 4, scalability: 3, detection_difficulty: 4}
+    references:
+      - Delegated-authorisation design literature (OAuth scope minimisation)
+
+  - id: PF-AGC-004
+    name: Agent-to-agent negotiation manipulation
+    family: agentic_commerce
+    maturity: projected
+    summary: >
+      A seller-side agent probes a buyer-side agent's decision policy across many
+      interactions, learns its concession behaviour and reservation price, and
+      systematically extracts worse terms than a human would accept.
+    rails: [agentic_checkout, card_cnp]
+    stages: [recon, execution]
+    genai_uplift: [conversational_agent, adaptive_evasion, orchestration]
+    victim_surfaces: [ai_agent, consumer]
+    actor_tiers: [organized, faas_vendor]
+    preconditions:
+      - Agent-to-agent negotiation surface
+      - Repeated interactions enabling policy inference
+    signals: [agent_trace, transaction, sequence]
+    simulation:
+      entities: [ai_agent, merchant]
+      amount_profile: escalating
+      temporal_shape: sustained_campaign
+      duration_days: [14, 180]
+      events_per_campaign: [20, 400]
+      entity_reuse: 0.6
+      notes: >
+        Loss is a persistent margin leak rather than a discrete fraud event,
+        so it needs a different label definition from the rest of the corpus.
+    detection_hypotheses:
+      - channel: agent_trace
+        feature: negotiation_outcome_drift_versus_market_benchmark
+        rationale: >
+          Systematically worse-than-market outcomes with one counterparty is
+          the only reliable evidence, since each individual trade looks valid.
+      - channel: sequence
+        feature: counterparty_specific_concession_asymmetry
+        rationale: Asymmetric concessions concentrated with one seller indicate policy extraction.
+      - channel: transaction
+        feature: realised_price_percentile_by_counterparty
+        rationale: Price percentile per counterparty exposes the leak in aggregate.
+    mitigations:
+      - Randomised negotiation policies to resist inference
+      - Market-benchmark guardrails on agent-accepted prices
+      - Counterparty-level outcome auditing
+    scores: {novelty: 5, impact: 3, scalability: 4, detection_difficulty: 5}
+    references:
+      - Research on strategic behaviour and policy extraction in automated negotiation
+
+  - id: PF-AGC-005
+    name: Buyer-agent impersonation
+    family: agentic_commerce
+    maturity: projected
+    summary: >
+      An attacker presents as a trusted, verified buying agent to obtain the
+      preferential handling — reduced friction, higher limits, faster
+      settlement — that merchants extend to recognised agent platforms.
+    rails: [agentic_checkout, card_token, card_cnp]
+    stages: [staging, execution, evasion]
+    genai_uplift: [code_generation, orchestration, adaptive_evasion]
+    victim_surfaces: [merchant, psp, ai_agent]
+    actor_tiers: [organized]
+    preconditions:
+      - Merchant trust tiers keyed to agent identity
+      - Weak or absent cryptographic agent attestation
+    signals: [agent_trace, device, transaction, graph]
+    simulation:
+      entities: [ai_agent, merchant, card, device]
+      amount_profile: drain
+      temporal_shape: burst
+      duration_days: [1, 14]
+      events_per_campaign: [10, 300]
+      entity_reuse: 0.35
+      notes: Exploits the friction reduction itself — trust becomes the attack surface.
+    detection_hypotheses:
+      - channel: agent_trace
+        feature: agent_attestation_validity_and_key_binding
+        rationale: >
+          Unforgeable attestation is the only robust discriminator; its absence
+          or failure is the signal.
+      - channel: device
+        feature: client_fingerprint_consistency_with_claimed_platform
+        rationale: Impersonators rarely reproduce the genuine platform's full client profile.
+      - channel: transaction
+        feature: fraud_rate_within_claimed_agent_cohort
+        rationale: Cohort-level fraud-rate drift reveals impersonation in aggregate.
+      - channel: graph
+        feature: agent_identity_to_instrument_fan_out
+        rationale: One claimed agent identity touching many unrelated instruments is anomalous.
+    mitigations:
+      - Cryptographic agent attestation bound to platform keys
+      - Cohort fraud-rate monitoring per agent identity
+      - Trust tiers earned on observed behaviour, not claimed identity
+    scores: {novelty: 5, impact: 4, scalability: 4, detection_difficulty: 4}
+    references:
+      - Emerging agent-identity and attestation proposals
